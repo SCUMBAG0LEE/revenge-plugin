@@ -2,7 +2,8 @@ import { storage } from "@vendetta/plugin";
 import { registerCommand } from "@vendetta/commands";
 import { findByProps } from "@vendetta/metro";
 import { logger } from "@vendetta";
-
+import { showToast } from "@vendetta/ui/toasts";
+import { getAssetIDByName } from "@vendetta/ui/assets";
 import Settings from "./components/Settings";
 
 const MessageSender = findByProps("sendMessage", "editMessage");
@@ -17,7 +18,7 @@ function sendBotMessage(channelId: string, content: string, embeds: any[] = []) 
 	if (!BotMessageCreator || !MessageActions) return;
 
 	const msg = BotMessageCreator.createBotMessage({ channelId: cId, content: "", embeds });
-	
+
 	// Megumin persona!
 	msg.author.username = "Megumin";
 	msg.author.avatar = "Megumin";
@@ -103,9 +104,15 @@ export default {
 						return;
 					}
 
+					try {
+						const lim = findByProps("getMaxFileSize");
+						const msg = findByProps("sendMessage", "editMessage");
+						showToast(`Debug: msg=${!!msg}, lim=${!!lim}`, getAssetIDByName("ic_info"));
+					} catch (e) { }
+
 					let res = await fetch(`https://api.reddit.com/r/${subreddit}/${sort}?limit=100&raw_json=1`, {
 						headers: {
-							"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+							"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0",
 							"Accept": "application/json",
 						},
 					});
@@ -153,8 +160,9 @@ export default {
 					if (silent) {
 						sendBotMessage(ctx.channel.id, "", [embed]);
 					} else {
-						if (MessageSender) {
-							MessageSender.sendMessage(ctx.channel.id, { content: imgUrl });
+						const cId = ctx.channel?.id ?? ChannelStore?.getChannelId?.() ?? ChannelStore?.getLastSelectedChannelId?.();
+						if (MessageSender && cId) {
+							MessageSender.sendMessage(cId, { content: imgUrl });
 						}
 					}
 				} catch (err: any) {

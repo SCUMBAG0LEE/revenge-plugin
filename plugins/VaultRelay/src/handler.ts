@@ -10,6 +10,7 @@ import type { PluginStorage } from "./settings";
 // Discord internal modules
 const CloudUpload = findByProps("CloudUpload")?.CloudUpload;
 const MessageSender = findByProps("sendMessage", "editMessage");
+const ChannelStore = findByProps("getChannelId");
 const UploadLimits = findByProps("getMaxFileSize");
 
 const MB = 1024 * 1024;
@@ -49,45 +50,30 @@ export function patchUploader(): (() => void) | undefined {
 		return undefined;
 	}
 
-	try {
-		const target = CloudUpload.prototype ?? CloudUpload;
-		return before("uploadFiles", target, (args: any[]) => {
+	const originalUpload = CloudUpload.prototype.reactNativeCompressAndExtractData;
+	if (!originalUpload) return undefined;
+
+	CloudUpload.prototype.reactNativeCompressAndExtractData = async function (...args: any[]) {
+		const file = this;
+		const size = file?.preCompressionSize ?? file?.size ?? 0;
 		const cfg = storage as unknown as PluginStorage;
 		const manualSetting = cfg.maxFileSizeMB ?? -1;
 		const maxBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
-		const uploads: any[] = args[0]?.uploads ?? args[0] ?? [];
 
-		if (!cfg.apiToken) {
-			// No token configured — let Discord handle everything normally
-			return;
-		}
+		if (!cfg.apiToken) return originalUpload.apply(this, args);
 
-		const oversized = uploads.filter(
-			(u: any) => u.size && u.size > maxBytes,
+		if (size <= maxBytes) return originalUpload.apply(this, args);
+
+		// Bypass Discord's file size limit check by spoofing the size
+		this.preCompressionSize = 1337;
+
+		showToast(
+			`📤 Uploading ${file.filename ?? file.name ?? "file"} to VaultRelay...`,
+			getAssetIDByName("ic_upload"),
 		);
 
-		if (oversized.length === 0) return;
-
-		// Prevent Discord from trying to upload the oversized files
-		const remaining = uploads.filter(
-			(u: any) => !u.size || u.size <= maxBytes,
-		);
-
-		// Replace uploads array with only the small ones
-		if (Array.isArray(args[0]?.uploads)) {
-			args[0].uploads = remaining;
-		} else if (Array.isArray(args[0])) {
-			args[0] = remaining;
-		}
-
-		// Upload each oversized file to VaultRelay in the background
-		for (const file of oversized) {
-			showToast(
-				`📤 Uploading ${file.filename ?? file.name} to VaultRelay...`,
-				getAssetIDByName("ic_upload"),
-			);
-
-			uploadToFileHost(
+		try {
+			const url = await uploadToFileHost(
 				{
 					uri: file.uri ?? file.path ?? file.url,
 					name: file.filename ?? file.name ?? "file",
@@ -102,32 +88,34 @@ export function patchUploader(): (() => void) | undefined {
 						);
 					}
 				},
-			)
-				.then((url) => {
-					showToast(
-						`✅ Uploaded to VaultRelay!`,
-						getAssetIDByName("Check"),
-					);
+			);
 
-					// Send the URL as a message in the current channel
-					const channelId = file.channelId;
-					if (channelId && MessageSender) {
-						MessageSender.sendMessage(channelId, { content: url });
-					}
-				})
-				.catch((err: Error) => {
-					showToast(
-						`❌ Upload failed: ${err.message}`,
-						getAssetIDByName("Small"),
-					);
-					console.error("[VaultRelay] Upload error:", err);
-				});
+			if (typeof this.setStatus === "function") this.setStatus("CANCELED");
+
+			showToast(
+				`✅ Uploaded to VaultRelay!`,
+				getAssetIDByName("Check"),
+			);
+
+			const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
+			if (channelId && MessageSender) {
+				MessageSender.sendMessage(channelId, { content: url });
+			}
+		} catch (err: any) {
+			showToast(
+				`❌ Upload failed: ${err.message}`,
+				getAssetIDByName("Small"),
+			);
+			console.error("[VaultRelay] Upload error:", err);
+			if (typeof this.setStatus === "function") this.setStatus("CANCELED");
 		}
-		});
-	} catch (err) {
-		console.error("[VaultRelay] Failed to patch CloudUpload:", err);
-		return undefined;
-	}
+
+		return null;
+	};
+
+	return () => {
+		CloudUpload.prototype.reactNativeCompressAndExtractData = originalUpload;
+	};
 }
 
 /**
