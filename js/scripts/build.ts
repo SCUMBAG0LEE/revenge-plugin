@@ -44,7 +44,7 @@ for (const dirent of plugins) {
 		entrypoints: [join(pluginSrcDir, "index.ts")],
 		outdir: pluginOutDir,
 		target: "browser",
-		format: "esm",
+		format: "iife",
 		minify: process.env.NODE_ENV === "production",
 		external: externals,
 	});
