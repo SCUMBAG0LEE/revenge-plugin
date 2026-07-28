@@ -17,8 +17,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Make sure the release step uses its own credentials:
-          # https://github.com/cycjimmy/semantic-release-action#private-packages
           persist-credentials: false
           fetch-depth: 0
 
@@ -27,29 +25,11 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-            path: ~/.bun/install/cache
-            key: ${{ runner.os }}-${{ matrix.bun }}-bun-${{ hashFiles('**/bun.lock') }}
-            restore-keys: |
-              ${{ runner.os }}-${{ matrix.bun }}-bun-
+      - name: Install dependencies
+        run: cd js && bun install
 
       - name: Build
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: cd js && bun run build
-
-      - name: Import GPG key
-        if: ${{ secrets.GPG_PRIVATE_KEY != '' }}
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-          fingerprint: ${{ vars.GPG_FINGERPRINT }}
-
-      - name: Install dependencies
-        run: bun install
 
       - name: Release
         env:

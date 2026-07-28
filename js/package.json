@@ -1,12 +1,11 @@
 {
   "scripts": {
-    "build": "bun run scripts/build.ts 2>/dev/null || node scripts/build.ts"
+    "build": "bun run scripts/build.ts"
   },
   "private": true,
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
-    "bun-types": "^1.1.0",
-    "esbuild": "^0.20.0"
+    "bun-types": "^1.1.0"
   },
   "trustedDependencies": ["@biomejs/biome"]
 }

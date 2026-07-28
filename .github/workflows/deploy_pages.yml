@@ -30,6 +30,9 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install dependencies
+        run: cd js && bun install
+
       - name: Build plugin
         run: cd js && bun run build
 
