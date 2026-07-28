@@ -4,6 +4,7 @@
 	"authors": [{ "name": "SCUMBAG0LEE" }],
 	"main": "index.js",
 	"vendetta": {
-		"icon": "ic_upload"
+		"icon": "ic_upload",
+		"original": "scumbag0lee.github.io/revenge-plugin/VaultRelay/"
 	}
 }
