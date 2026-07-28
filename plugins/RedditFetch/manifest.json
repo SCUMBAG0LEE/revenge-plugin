@@ -2,7 +2,7 @@
 	"name": "RedditFetch",
 	"description": "Fetch a random image from any subreddit, with Megumin as your trusty bot.",
 	"authors": [{ "name": "SCUMBAG0LEE" }],
-	"main": "src/index.ts",
+	"main": "index.js",
 	"vendetta": {
 		"icon": "ic_reaction_smile",
 		"original": "scumbag0lee.github.io/revenge-plugin/RedditFetch/"

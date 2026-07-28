@@ -37,12 +37,57 @@ for (const dirent of plugins) {
 	const pluginManifestPath = join(pluginsDir, pluginName, "manifest.json");
 	const pluginOutDir = join(outdirRoot, pluginName);
 
-	console.log(`\n🔨 Copying ${pluginName}...`);
+	console.log(`\n🔨 Building ${pluginName}...`);
 	await mkdir(pluginOutDir, { recursive: true });
 
-	// Copy the src folder
-	if (await Bun.file(join(pluginSrcDir, "index.ts")).exists()) {
-		await cp(pluginSrcDir, join(pluginOutDir, "src"), { recursive: true });
+	const result = await Bun.build({
+		entrypoints: [join(pluginSrcDir, "index.ts")],
+		outdir: pluginOutDir,
+		target: "browser",
+		format: "iife",
+		globalName: "plugin",
+		naming: "[name].[ext]",
+		minify: process.env.NODE_ENV === "production",
+		external: externals,
+	});
+
+	if (!result.success) {
+		console.error(`❌ Bun build failed for ${pluginName}:`);
+		for (const log of result.logs) {
+			console.error(log);
+		}
+		failed = true;
+		continue;
+	}
+
+	// Post-process index.js so Vendetta's eval() can access the APIs
+	const jsFile = Bun.file(join(pluginOutDir, "index.js"));
+	if (await jsFile.exists()) {
+		let jsText = await jsFile.text();
+		
+		// Replace Bun's globalThis lookups with Vendetta's actual globals
+		const globalMappings: Record<string, string> = {
+			"react": "window.vendetta.metro.common.React",
+			"react-native": "window.vendetta.metro.common.ReactNative",
+			"@vendetta/patcher": "window.vendetta.patcher",
+			"@vendetta/metro": "window.vendetta.metro",
+			"@vendetta/metro/common": "window.vendetta.metro.common",
+			"@vendetta/plugin": "window.vendetta.plugin",
+			"@vendetta/storage": "window.vendetta.storage",
+			"@vendetta/ui/toasts": "window.vendetta.ui.toasts",
+			"@vendetta/ui/assets": "window.vendetta.ui.assets",
+			"@vendetta/ui/components": "window.vendetta.ui.components",
+			"@vendetta/commands": "window.vendetta.commands",
+			"@vendetta": "window.vendetta"
+		};
+
+		for (const [ext, glob] of Object.entries(globalMappings)) {
+			jsText = jsText.replaceAll(`globalThis["${ext}"]`, glob);
+			jsText = jsText.replaceAll(`globalThis['${ext}']`, glob);
+		}
+		
+		jsText = `${jsText}\nplugin;`;
+		await Bun.write(join(pluginOutDir, "index.js"), jsText);
 	}
 
 	const manifestFile = Bun.file(pluginManifestPath);
