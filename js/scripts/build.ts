@@ -70,6 +70,35 @@ for (const dirent of plugins) {
 		console.warn(`⚠️ Warning: ${pluginName} is missing manifest.json`);
 	}
 
+	// Generate index.html inside the plugin folder so visiting the directory in browser doesn't 404
+	const pluginHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>${pluginName} - Revenge Plugin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f1015; color: #e2e8f0; padding: 2rem; text-align: center; }
+        .card { max-width: 500px; margin: 4rem auto; background: #181920; border: 1px solid #272730; border-radius: 12px; padding: 2rem; }
+        h1 { color: #f8fafc; font-size: 1.5rem; margin-bottom: 0.5rem; }
+        p { color: #94a3b8; margin-bottom: 1.5rem; }
+        a { color: #38bdf8; text-decoration: none; font-weight: 600; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🧩 ${pluginName}</h1>
+        <p>${description}</p>
+        <p>This is a Discord Revenge plugin directory.</p>
+        <a href="../">← Back to Plugin Dashboard</a>
+    </div>
+</body>
+</html>`;
+	await Bun.write(join(pluginOutDir, "index.html"), pluginHtml);
+
 	builtPlugins.push({ name: pluginName, description, folder: pluginName });
 	console.log(`✅ Built ${pluginName} successfully -> js/build/${pluginName}`);
 }
@@ -78,7 +107,7 @@ if (failed) {
 	process.exit(1);
 }
 
-// Generate a landing page index.html at js/build/index.html so root URL isn't 404
+// Generate landing page index.html at js/build/index.html
 const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
