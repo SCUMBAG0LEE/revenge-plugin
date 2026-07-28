@@ -6,7 +6,7 @@ export interface PluginStorage {
 	serverUrl: string;
 	/** Secret bearer token for authentication. */
 	apiToken: string;
-	/** Files larger than this (in MB) trigger auto-upload. */
+	/** Files larger than this (in MB) trigger auto-upload. Set to -1 for auto-detect based on Discord limit. */
 	maxFileSizeMB: number;
 	/** Whether to auto-upload without prompting. */
 	autoUpload: boolean;
@@ -15,7 +15,7 @@ export interface PluginStorage {
 const DEFAULTS: PluginStorage = {
 	serverUrl: "https://megumin.me/grimoire",
 	apiToken: "",
-	maxFileSizeMB: 10,
+	maxFileSizeMB: -1,
 	autoUpload: true,
 };
 

@@ -1,4 +1,4 @@
-import { before } from "@vendetta/patcher";
+import { before, after } from "@vendetta/patcher";
 import { findByProps } from "@vendetta/metro";
 import { showToast } from "@vendetta/ui/toasts";
 import { storage } from "@vendetta/plugin";
@@ -10,8 +10,30 @@ import type { PluginStorage } from "./settings";
 // Discord internal modules
 const CloudUpload = findByProps("CloudUpload")?.CloudUpload;
 const MessageSender = findByProps("sendMessage", "editMessage");
+const UploadLimits = findByProps("getMaxFileSize");
 
-const MB = 1024 * 1024;
+export let realMaxFileSize = 10 * 1024 * 1024; // fallback to 10MB
+
+export function patchUploadLimits(): (() => void) | undefined {
+	if (!UploadLimits?.getMaxFileSize) {
+		console.warn("[VaultRelay] UploadLimits module not found — UI limit patching skipped");
+		return undefined;
+	}
+	
+	try {
+		return after("getMaxFileSize", UploadLimits, (args, res) => {
+			if (typeof res === "number") {
+				// Capture Discord's real upload limit (e.g. 10MB, 50MB, or 500MB depending on Nitro)
+				realMaxFileSize = res;
+			}
+			// Spoof the max file size so the UI allows selecting large files
+			return Number.MAX_SAFE_INTEGER;
+		});
+	} catch (err) {
+		console.error("[VaultRelay] Failed to patch UploadLimits:", err);
+		return undefined;
+	}
+}
 
 /**
  * Patches the CloudUpload constructor to intercept file uploads that
@@ -30,7 +52,8 @@ export function patchUploader(): (() => void) | undefined {
 		const target = CloudUpload.prototype ?? CloudUpload;
 		return before("uploadFiles", target, (args: any[]) => {
 		const cfg = storage as unknown as PluginStorage;
-		const maxBytes = (cfg.maxFileSizeMB ?? 10) * MB;
+		const manualSetting = cfg.maxFileSizeMB ?? -1;
+		const maxBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
 		const uploads: any[] = args[0]?.uploads ?? args[0] ?? [];
 
 		if (!cfg.apiToken) {
@@ -120,7 +143,8 @@ export function patchMessageSender(): (() => void) | undefined {
 	try {
 		return before("sendMessage", MessageSender, (args: any[]) => {
 			const cfg = storage as unknown as PluginStorage;
-			const maxBytes = (cfg.maxFileSizeMB ?? 10) * MB;
+			const manualSetting = cfg.maxFileSizeMB ?? -1;
+			const maxBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
 			const message = args[1];
 
 			if (!cfg.apiToken || !message?.attachments?.length) return;

@@ -1,7 +1,7 @@
 import { storage } from "@vendetta/plugin";
 
 import { ensureDefaults } from "./settings";
-import { patchUploader, patchMessageSender } from "./handler";
+import { patchUploader, patchMessageSender, patchUploadLimits } from "./handler";
 import Settings from "./components/Settings";
 
 const unpatches: (() => void)[] = [];
@@ -9,6 +9,9 @@ const unpatches: (() => void)[] = [];
 export default {
 	onLoad() {
 		ensureDefaults(storage);
+
+		const u0 = patchUploadLimits();
+		if (u0) unpatches.push(u0);
 
 		const u1 = patchUploader();
 		if (u1) unpatches.push(u1);

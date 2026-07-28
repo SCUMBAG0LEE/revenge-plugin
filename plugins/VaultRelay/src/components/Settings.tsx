@@ -33,11 +33,11 @@ export default function Settings() {
 
 				<FormInput
 					title="Max File Size (MB)"
-					placeholder="10"
-					value={String(storage.maxFileSizeMB ?? 10)}
+					placeholder="<0 for Auto, 0 for Always"
+					value={String(storage.maxFileSizeMB ?? -1)}
 					onChange={(val: string) => {
 						const n = Number.parseInt(val, 10);
-						if (!Number.isNaN(n) && n > 0) {
+						if (!Number.isNaN(n)) {
 							storage.maxFileSizeMB = n;
 						}
 					}}

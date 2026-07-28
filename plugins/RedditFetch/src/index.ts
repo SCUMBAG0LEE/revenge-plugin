@@ -95,7 +95,12 @@ export default {
 						return;
 					}
 
-					let res = await fetch(`https://www.reddit.com/r/${subreddit}/${sort}.json?limit=100`);
+					let res = await fetch(`https://api.reddit.com/r/${subreddit}/${sort}?limit=100&raw_json=1`, {
+						headers: {
+							"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+							"Accept": "application/json",
+						},
+					});
 					if (!res.ok) {
 						sendBotMessage(ctx.channel.id, `❌ Failed to fetch r/${subreddit} (HTTP ${res.status})`);
 						return;
