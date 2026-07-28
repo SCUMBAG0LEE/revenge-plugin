@@ -45,6 +45,7 @@ for (const dirent of plugins) {
 		outdir: pluginOutDir,
 		target: "browser",
 		format: "iife",
+		naming: "[name].[ext]",
 		minify: process.env.NODE_ENV === "production",
 		external: externals,
 	});
@@ -56,6 +57,17 @@ for (const dirent of plugins) {
 		}
 		failed = true;
 		continue;
+	}
+
+	// Post-process index.js so Revenge's eval() receives the plugin object
+	const jsFile = Bun.file(join(pluginOutDir, "index.js"));
+	if (await jsFile.exists()) {
+		let jsText = await jsFile.text();
+		// Ensure the evaluated JS expression returns the default export object to Revenge/Vendetta
+		if (!jsText.includes("return index_default")) {
+			jsText = `(() => {\n${jsText}\nreturn typeof index_default !== 'undefined' ? index_default : {};\n})();`;
+		}
+		await Bun.write(join(pluginOutDir, "index.js"), jsText);
 	}
 
 	const manifestFile = Bun.file(pluginManifestPath);
@@ -70,7 +82,7 @@ for (const dirent of plugins) {
 		console.warn(`⚠️ Warning: ${pluginName} is missing manifest.json`);
 	}
 
-	// Generate index.html inside the plugin folder so visiting the directory in browser doesn't 404
+	// Generate index.html inside the plugin folder
 	const pluginHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
