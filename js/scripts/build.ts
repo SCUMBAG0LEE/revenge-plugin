@@ -64,11 +64,30 @@ for (const dirent of plugins) {
 	if (await jsFile.exists()) {
 		let jsText = await jsFile.text();
 		
-		// Wrap the CJS bundle to guarantee module.exports exists and is returned by eval()
+		// Wrap the CJS bundle and polyfill require() to map directly to Vendetta's globals
 		jsText = `
 var _module = { exports: {} };
 var _exports = _module.exports;
 (function(module, exports) {
+    var require = function(mod) {
+        var mappings = {
+            "react": window.vendetta.metro.common.React,
+            "react-native": window.vendetta.metro.common.ReactNative,
+            "@vendetta/patcher": window.vendetta.patcher,
+            "@vendetta/metro": window.vendetta.metro,
+            "@vendetta/metro/common": window.vendetta.metro.common,
+            "@vendetta/plugin": window.vendetta.plugin,
+            "@vendetta/storage": window.vendetta.storage,
+            "@vendetta/ui/toasts": window.vendetta.ui.toasts,
+            "@vendetta/ui/assets": window.vendetta.ui.assets,
+            "@vendetta/ui/components": window.vendetta.ui.components,
+            "@vendetta/commands": window.vendetta.commands,
+            "@vendetta": window.vendetta
+        };
+        if (mappings[mod]) return mappings[mod];
+        throw new Error("Cannot find module '" + mod + "'");
+    };
+
 ${jsText}
 })(_module, _exports);
 _module.exports;
