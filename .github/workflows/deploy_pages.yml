@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: "pages"
   cancel-in-progress: true
 
 jobs:
@@ -31,10 +31,10 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: cd js && bun install
+        run: bun install
 
       - name: Build plugin
-        run: cd js && bun run build
+        run: bun run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -42,7 +42,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: js/build/
+          path: dist/
 
       - name: Deploy to GitHub Pages
         id: deployment

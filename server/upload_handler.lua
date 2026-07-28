@@ -77,11 +77,11 @@ while true do
 
         -- Open output file on first header encounter if not yet opened
         if not file_handle and not saved_path then
-            -- Generate unique filename: timestamp_random.ext
+            -- Generate unique filename: timestamp_requestid.ext
             local unique_name = string.format(
                 "%d_%s%s",
                 ngx.now() * 1000,
-                string.sub(ngx.md5(ngx.now() .. math.random()), 1, 8),
+                string.sub(ngx.md5(ngx.var.request_id or tostring(ngx.now())), 1, 8),
                 extension
             )
             saved_path = upload_dir .. unique_name

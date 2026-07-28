@@ -30,12 +30,10 @@ This repo uses [Bun](https://bun.sh/) for ultra-fast bundling.
 ```bash
 # Install dependencies & build all plugins
 bun install
-cd js
-bun install
 bun run build
 ```
 
-Compiled plugins will be generated in `js/build/[PluginName]`.
+Compiled plugins will be generated in `dist/[PluginName]`.
 
 ## 📜 License
 

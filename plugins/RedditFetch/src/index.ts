@@ -95,9 +95,13 @@ export default {
 						return;
 					}
 
-					let res = await fetch(`https://www.reddit.com/r/${subreddit}/${sort}.json?limit=100`);
+					let res = await fetch(`https://www.reddit.com/r/${subreddit}/${sort}.json?limit=100`, {
+						headers: {
+							"User-Agent": "DiscordRevengePlugin/1.0 (RedditFetch by SCUMBAG0LEE)",
+						},
+					});
 					if (!res.ok) {
-						sendBotMessage(ctx.channel.id, `❌ Failed to fetch r/${subreddit}`);
+						sendBotMessage(ctx.channel.id, `❌ Failed to fetch r/${subreddit} (HTTP ${res.status})`);
 						return;
 					}
 					let json = await res.json();

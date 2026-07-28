@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "outDir": "dist",
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "node",
+        "esModuleInterop": true,
+        "jsx": "react-native",
+        "allowJs": true,
+        "skipLibCheck": true,
+        "resolveJsonModule": true,
+        "strict": true,
+        "baseUrl": ".",
+        "paths": {
+            "@lib/*": ["lib/*"]
+        }
+    },
+    "include": ["plugins", "types/**/*.d.ts", "node_modules/vendetta-types"]
+}
