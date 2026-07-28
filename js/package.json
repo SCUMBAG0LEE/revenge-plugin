@@ -5,7 +5,8 @@
   "private": true,
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
-    "bun-types": "^1.1.0"
+    "bun-types": "^1.1.0",
+    "react": "^18.2.0"
   },
   "trustedDependencies": ["@biomejs/biome"]
 }

@@ -7,6 +7,10 @@ const outdir = join(projectRoot, "build", "revenge");
 await mkdir(outdir, { recursive: true });
 
 const externals = [
+	"react",
+	"react/jsx-runtime",
+	"react/jsx-dev-runtime",
+	"react-native",
 	"@vendetta/patcher",
 	"@vendetta/metro",
 	"@vendetta/metro/common",

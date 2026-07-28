@@ -1,15 +1,15 @@
 {
 	"compilerOptions": {
-		// Features
 		"types": ["bun-types"],
-		"lib": ["ESNext"],
+		"lib": ["ESNext", "DOM"],
 		"module": "ESNext",
 		"target": "ESNext",
-		// Bundler
+		"jsx": "react",
+		"jsxFactory": "React.createElement",
+		"jsxFragmentFactory": "React.Fragment",
 		"moduleResolution": "bundler",
 		"verbatimModuleSyntax": true,
 		"noEmit": true,
-		// Type checking
 		"strict": true,
 		"skipLibCheck": true,
 		"noFallthroughCasesInSwitch": true,
