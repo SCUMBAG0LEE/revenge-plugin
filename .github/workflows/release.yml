@@ -25,14 +25,11 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies (root)
+      - name: Install dependencies
         run: bun install
 
-      - name: Install dependencies (js)
-        run: cd js && bun install
-
       - name: Build
-        run: cd js && bun run build
+        run: bun run build
 
       - name: Release
         env:
