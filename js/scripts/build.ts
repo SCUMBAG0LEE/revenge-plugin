@@ -44,7 +44,7 @@ for (const dirent of plugins) {
 		entrypoints: [join(pluginSrcDir, "index.ts")],
 		outdir: pluginOutDir,
 		target: "browser",
-		format: "iife",
+		format: "cjs",
 		naming: "[name].[ext]",
 		minify: process.env.NODE_ENV === "production",
 		external: externals,
@@ -59,14 +59,11 @@ for (const dirent of plugins) {
 		continue;
 	}
 
-	// Post-process index.js so Revenge's eval() receives the plugin object
+	// Post-process index.js so Revenge/Vendetta eval() or CJS module loader gets the plugin object
 	const jsFile = Bun.file(join(pluginOutDir, "index.js"));
 	if (await jsFile.exists()) {
 		let jsText = await jsFile.text();
-		// Ensure the evaluated JS expression returns the default export object to Revenge/Vendetta
-		if (!jsText.includes("return index_default")) {
-			jsText = `(() => {\n${jsText}\nreturn typeof index_default !== 'undefined' ? index_default : {};\n})();`;
-		}
+		jsText = `${jsText}\nmodule.exports;`;
 		await Bun.write(join(pluginOutDir, "index.js"), jsText);
 	}
 
