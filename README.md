@@ -24,7 +24,19 @@ bun install
 bun run build
 ```
 
-The compiled plugin bundle will be generated at `js/build/revenge/index.js`.
+The compiled plugin bundle and `manifest.json` will be generated at `js/build/revenge/`.
+
+## 📱 How to Install in Revenge App
+
+1. Commit and push your built `js/build/revenge/` folder to GitHub.
+2. In the **Revenge** Discord app on your phone:
+   - Go to **User Settings** ⚙️ → **Revenge** → **Plugins**.
+   - Tap the **`+`** (Install Plugin) button in the top right.
+   - Enter your GitHub Raw plugin URL:
+     ```
+     https://raw.githubusercontent.com/SCUMBAG0LEE/revenge-plugin-test/main/js/build/revenge/
+     ```
+3. Tap **Install**, then open **VaultRelay Settings** inside Revenge plugins list to enter your **Server URL** (`https://megumin.me/grimoire`) and your **API Token**!
 
 ## 🖥️ Server Setup
 
