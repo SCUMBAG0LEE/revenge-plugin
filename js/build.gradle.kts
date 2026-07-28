@@ -1,4 +1,5 @@
 import org.apache.tools.ant.taskdefs.condition.Os
+import java.io.File
 import kotlin.String
 
 group = "io.github.revenge.plugin"
@@ -9,13 +10,20 @@ tasks {
         group = "build"
         description = "Runs Bun with arguments: ${args.joinToString(" ")}"
 
-        val bunCommand = if (Os.isFamily(Os.FAMILY_WINDOWS)) "bun.exe" else "${System.getProperty("user.home")}/.bun/bin/bun"
+        val homeBun = File(System.getProperty("user.home"), ".bun/bin/bun")
+        val bunCommand = when {
+            Os.isFamily(Os.FAMILY_WINDOWS) -> "bun.exe"
+            homeBun.exists() -> homeBun.absolutePath
+            else -> "bun"
+        }
 
         commandLine(bunCommand, *args)
     }
 
     val installDependencies by registeringBunTask("install")
-    val build by registeringBunTask("run", "build")
+    val build by registeringBunTask("run", "build") {
+        dependsOn(installDependencies)
+    }
 }
 
 configurations {

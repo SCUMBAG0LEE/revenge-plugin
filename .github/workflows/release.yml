@@ -22,19 +22,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
-      - name: Cache Gradle
-        uses: burrunan/gradle-cache-action@v2
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -47,7 +38,7 @@ jobs:
       - name: Build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew build clean
+        run: cd js && bun run build
 
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6

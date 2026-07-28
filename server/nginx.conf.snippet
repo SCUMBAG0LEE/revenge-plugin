@@ -1,0 +1,89 @@
+# ─── VaultRelay Upload Server ──────────────────────────────────────────
+# Add this inside your `server { }` block for your domain.
+#
+# ── Quick Setup ──────────────────────────────────────────────────────
+#
+#   1. Create the upload directory:
+#        sudo mkdir -p /var/www/uploads/grimoire
+#        sudo chown www-data:www-data /var/www/uploads/grimoire
+#
+#   2. Place upload_handler.lua somewhere accessible, e.g.:
+#        sudo cp upload_handler.lua /etc/openresty/lua/upload_handler.lua
+#
+#   3. Add environment variables at the TOP of /etc/openresty/nginx.conf
+#      (BEFORE the `http { }` block):
+#
+#        env FILEHOST_AUTH_TOKEN=your-secret-token-here;
+#
+#      Optional overrides (defaults shown):
+#
+#        env FILEHOST_UPLOAD_DIR=/var/www/uploads/grimoire/;
+#        env FILEHOST_PUBLIC_PATH=/grimoire/;
+#        env FILEHOST_CHUNK_SIZE=8192;
+#
+#   4. Add the location blocks below into your server { } block
+#
+#   5. Reload OpenResty:
+#        sudo systemctl reload openresty
+#
+# ── Customisation Examples ───────────────────────────────────────────
+#
+#   Change the URL path to /vault/:
+#     env FILEHOST_PUBLIC_PATH=/vault/;
+#     env FILEHOST_UPLOAD_DIR=/var/www/uploads/vault/;
+#     - Update the location blocks below to use /vault/ instead of /grimoire/
+#     - Update the plugin's Server URL setting to match
+#
+#   Use a different domain:
+#     - Just point your DNS and server_name to the new domain
+#     - The Lua handler auto-detects the Host header, no code changes needed
+#     - Update the plugin's Server URL setting to match
+#
+# ───────────────────────────────────────────────────────────────────────
+
+# Serve uploaded files (GET requests)
+location /grimoire/ {
+    alias /var/www/uploads/grimoire/;
+
+    # Performance: use sendfile for zero-copy serving
+    sendfile           on;
+    tcp_nopush         on;
+    tcp_nodelay        on;
+
+    # Allow browser caching
+    expires            30d;
+    add_header         Cache-Control "public, immutable";
+
+    # Security: prevent directory listing
+    autoindex          off;
+
+    # CORS (allows Discord embeds to load the file)
+    add_header         Access-Control-Allow-Origin  "*" always;
+    add_header         Access-Control-Allow-Methods "GET, OPTIONS" always;
+    add_header         X-Content-Type-Options       "nosniff" always;
+}
+
+# Upload endpoint (POST requests)
+location = /grimoire/upload {
+    # Allow large uploads (adjust as needed)
+    client_max_body_size       500m;
+
+    # Stream directly to Lua — don't buffer to temp files
+    client_body_buffer_size    128k;
+
+    # Only allow POST
+    limit_except POST {
+        deny all;
+    }
+
+    # Handle CORS preflight
+    if ($request_method = 'OPTIONS') {
+        add_header Access-Control-Allow-Origin  "*";
+        add_header Access-Control-Allow-Methods "POST, OPTIONS";
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type";
+        add_header Access-Control-Max-Age       86400;
+        return 204;
+    }
+
+    content_by_lua_file /etc/openresty/lua/upload_handler.lua;
+}

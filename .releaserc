@@ -31,7 +31,7 @@
       {
         "assets": [
           {
-            "path": "plugin/build/libs/plugin-*.rp?(.asc)"
+            "path": "js/build/revenge/*"
           }
         ],
         successComment: false

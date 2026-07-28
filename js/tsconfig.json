@@ -1,9 +1,10 @@
 {
 	"compilerOptions": {
 		// Features
+		"types": ["bun-types"],
 		"lib": ["ESNext"],
 		"module": "ESNext",
-		"target": "ES2015",
+		"target": "ESNext",
 		// Bundler
 		"moduleResolution": "bundler",
 		"verbatimModuleSyntax": true,
