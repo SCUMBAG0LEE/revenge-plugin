@@ -22,7 +22,7 @@ function sendBotMessage(channelId: string, content: string, embeds: any[] = []) 
 	msg.author.username = "Megumin";
 	msg.author.avatar = "Megumin";
 	if (BotAvatars && BotAvatars.BOT_AVATARS) {
-		BotAvatars.BOT_AVATARS.Megumin = "https://i.imgur.com/2Xy0j1L.png";
+		BotAvatars.BOT_AVATARS.Megumin = "https://upload.wikimedia.org/wikipedia/en/b/b3/Megumin_light_novel.png";
 	}
 
 	if (typeof content === "string") {
@@ -95,11 +95,7 @@ export default {
 						return;
 					}
 
-					let res = await fetch(`https://www.reddit.com/r/${subreddit}/${sort}.json?limit=100`, {
-						headers: {
-							"User-Agent": "DiscordRevengePlugin/1.0 (RedditFetch by SCUMBAG0LEE)",
-						},
-					});
+					let res = await fetch(`https://www.reddit.com/r/${subreddit}/${sort}.json?limit=100`);
 					if (!res.ok) {
 						sendBotMessage(ctx.channel.id, `❌ Failed to fetch r/${subreddit} (HTTP ${res.status})`);
 						return;

@@ -26,7 +26,9 @@ export function patchUploader(): (() => void) | undefined {
 		return undefined;
 	}
 
-	return before("uploadFiles", CloudUpload.prototype, (args: any[]) => {
+	try {
+		const target = CloudUpload.prototype ?? CloudUpload;
+		return before("uploadFiles", target, (args: any[]) => {
 		const cfg = storage as unknown as PluginStorage;
 		const maxBytes = (cfg.maxFileSizeMB ?? 10) * MB;
 		const uploads: any[] = args[0]?.uploads ?? args[0] ?? [];
@@ -97,7 +99,10 @@ export function patchUploader(): (() => void) | undefined {
 					console.error("[VaultRelay] Upload error:", err);
 				});
 		}
-	});
+	} catch (err) {
+		console.error("[VaultRelay] Failed to patch CloudUpload:", err);
+		return undefined;
+	}
 }
 
 /**
@@ -111,56 +116,61 @@ export function patchMessageSender(): (() => void) | undefined {
 		return undefined;
 	}
 
-	return before("sendMessage", MessageSender, (args: any[]) => {
-		const cfg = storage as unknown as PluginStorage;
-		const maxBytes = (cfg.maxFileSizeMB ?? 10) * MB;
-		const message = args[1];
+	try {
+		return before("sendMessage", MessageSender, (args: any[]) => {
+			const cfg = storage as unknown as PluginStorage;
+			const maxBytes = (cfg.maxFileSizeMB ?? 10) * MB;
+			const message = args[1];
 
-		if (!cfg.apiToken || !message?.attachments?.length) return;
+			if (!cfg.apiToken || !message?.attachments?.length) return;
 
-		const oversized = message.attachments.filter(
-			(a: any) => a.size && a.size > maxBytes,
-		);
-
-		if (oversized.length === 0) return;
-
-		// Keep only attachments under the limit
-		message.attachments = message.attachments.filter(
-			(a: any) => !a.size || a.size <= maxBytes,
-		);
-
-		const channelId = args[0];
-
-		for (const file of oversized) {
-			showToast(
-				`📤 Uploading ${file.filename ?? "file"} to VaultRelay...`,
-				getAssetIDByName("ic_upload"),
+			const oversized = message.attachments.filter(
+				(a: any) => a.size && a.size > maxBytes,
 			);
 
-			uploadToFileHost(
-				{
-					uri: file.uri ?? file.url,
-					name: file.filename ?? "file",
-					type: file.content_type ?? "application/octet-stream",
-				},
-				cfg,
-			)
-				.then((url) => {
-					showToast(
-						`✅ Uploaded to VaultRelay!`,
-						getAssetIDByName("Check"),
-					);
-					if (MessageSender) {
-						MessageSender.sendMessage(channelId, { content: url });
-					}
-				})
-				.catch((err: Error) => {
-					showToast(
-						`❌ Upload failed: ${err.message}`,
-						getAssetIDByName("Small"),
-					);
-					console.error("[VaultRelay] Upload error:", err);
-				});
-		}
-	});
+			if (oversized.length === 0) return;
+
+			// Keep only attachments under the limit
+			message.attachments = message.attachments.filter(
+				(a: any) => !a.size || a.size <= maxBytes,
+			);
+
+			const channelId = args[0];
+
+			for (const file of oversized) {
+				showToast(
+					`📤 Uploading ${file.filename ?? "file"} to VaultRelay...`,
+					getAssetIDByName("ic_upload"),
+				);
+
+				uploadToFileHost(
+					{
+						uri: file.uri ?? file.url,
+						name: file.filename ?? "file",
+						type: file.content_type ?? "application/octet-stream",
+					},
+					cfg,
+				)
+					.then((url) => {
+						showToast(
+							`✅ Uploaded to VaultRelay!`,
+							getAssetIDByName("Check"),
+						);
+						if (MessageSender) {
+							MessageSender.sendMessage(channelId, { content: url });
+						}
+					})
+					.catch((err: Error) => {
+						showToast(
+							`❌ Upload failed: ${err.message}`,
+							getAssetIDByName("Small"),
+						);
+						console.error("[VaultRelay] Upload error:", err);
+					});
+			}
+		});
+	} catch (err) {
+		console.error("[VaultRelay] Failed to patch MessageSender:", err);
+		return undefined;
+	}
 }
