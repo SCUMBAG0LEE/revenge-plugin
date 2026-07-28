@@ -68,8 +68,8 @@ location /grimoire/ {
 
 # Upload endpoint (POST requests)
 location = /grimoire/upload {
-    # Allow large uploads (adjust as needed)
-    client_max_body_size       500m;
+    # Allow unlimited uploads (disable body size checking)
+    client_max_body_size       0;
 
     # Stream directly to Lua — don't buffer to temp files
     client_body_buffer_size    128k;
