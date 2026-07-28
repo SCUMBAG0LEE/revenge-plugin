@@ -1,10 +1,12 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-const projectRoot = join(import.meta.dir, "..");
-const outdir = join(projectRoot, "build", "revenge");
+const jsRoot = join(import.meta.dir, "..");
+const projectRoot = join(jsRoot, "..");
+const pluginsDir = join(projectRoot, "plugins");
+const outdirRoot = join(jsRoot, "build");
 
-await mkdir(outdir, { recursive: true });
+await mkdir(outdirRoot, { recursive: true });
 
 const externals = [
 	"react",
@@ -19,33 +21,52 @@ const externals = [
 	"@vendetta/ui/toasts",
 	"@vendetta/ui/assets",
 	"@vendetta/ui/components",
+	"@vendetta/commands",
+	"@vendetta",
 ];
 
-const result = await Bun.build({
-	entrypoints: [join(projectRoot, "src", "index.ts")],
-	outdir,
-	target: "browser",
-	format: "esm",
-	minify: process.env.NODE_ENV === "production",
-	external: externals,
-});
+const plugins = await readdir(pluginsDir, { withFileTypes: true });
 
-if (!result.success) {
-	console.error("Bun build failed:");
-	for (const log of result.logs) {
-		console.error(log);
+let failed = false;
+
+for (const dirent of plugins) {
+	if (!dirent.isDirectory()) continue;
+	const pluginName = dirent.name;
+	const pluginSrcDir = join(pluginsDir, pluginName, "src");
+	const pluginManifest = join(pluginsDir, pluginName, "manifest.json");
+	const pluginOutDir = join(outdirRoot, pluginName);
+
+	console.log(`\n🔨 Building ${pluginName}...`);
+	await mkdir(pluginOutDir, { recursive: true });
+
+	const result = await Bun.build({
+		entrypoints: [join(pluginSrcDir, "index.ts")],
+		outdir: pluginOutDir,
+		target: "browser",
+		format: "esm",
+		minify: process.env.NODE_ENV === "production",
+		external: externals,
+	});
+
+	if (!result.success) {
+		console.error(`❌ Bun build failed for ${pluginName}:`);
+		for (const log of result.logs) {
+			console.error(log);
+		}
+		failed = true;
+		continue;
 	}
-	process.exit(1);
+
+	const manifestFile = Bun.file(pluginManifest);
+	if (await manifestFile.exists()) {
+		await Bun.write(join(pluginOutDir, "manifest.json"), manifestFile);
+	} else {
+		console.warn(`⚠️ Warning: ${pluginName} is missing manifest.json`);
+	}
+
+	console.log(`✅ Built ${pluginName} successfully -> js/build/${pluginName}`);
 }
 
-// Generate manifest.json for Revenge / Vendetta plugin loader
-const manifest = {
-	name: "VaultRelay",
-	description: "Auto-upload oversized attachments to your self-hosted OpenResty server",
-	authors: [{ name: "SCUMBAG0LEE" }],
-	main: "index.js",
-};
-
-await Bun.write(join(outdir, "manifest.json"), JSON.stringify(manifest, null, 2));
-
-console.log(`✅ Built successfully to ${outdir}`);
+if (failed) {
+	process.exit(1);
+}

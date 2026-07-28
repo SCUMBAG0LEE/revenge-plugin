@@ -1,0 +1,9 @@
+{
+	"name": "VaultRelay",
+	"description": "Auto-upload oversized attachments to your self-hosted OpenResty server",
+	"authors": [{ "name": "SCUMBAG0LEE" }],
+	"main": "index.js",
+	"vendetta": {
+		"icon": "ic_upload"
+	}
+}
