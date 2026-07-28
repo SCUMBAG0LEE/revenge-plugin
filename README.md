@@ -13,18 +13,18 @@ A high-performance self-hosted file uploader plugin for **Discord Revenge** that
 ## 🛠️ Prerequisites
 
 - [Bun](https://bun.sh/) (v1.0.0+) for building the JS bundle
-- JDK 17+ for the Gradle build
-- An Ubuntu server with [OpenResty](https://openresty.org/) for the upload backend
+- A Linux server with [OpenResty](https://openresty.org/) for the upload backend
 
 ## 📦 Building
 
 ```bash
-# Full build (Gradle + Bun)
-./gradlew build
-
-# JS-only build
-cd js && bun run build
+# Install dependencies & build plugin bundle
+cd js
+bun install
+bun run build
 ```
+
+The compiled plugin bundle will be generated at `js/build/revenge/index.js`.
 
 ## 🖥️ Server Setup
 
@@ -40,9 +40,12 @@ sudo cp server/upload_handler.lua /etc/openresty/lua/upload_handler.lua
 
 # 3. Add the location blocks from nginx.conf.snippet to your server block
 
-# 4. Set your secret token (add to TOP of /etc/openresty/nginx.conf,
-#    BEFORE the http { } block):
-#    env FILEHOST_AUTH_TOKEN=your-secret-token-here;
+# 4. Generate a secret token using OpenSSL:
+#    openssl rand -hex 32
+#
+#    Then set your token at the TOP of /etc/openresty/nginx.conf
+#    (BEFORE the http { } block):
+#    env FILEHOST_AUTH_TOKEN=your-generated-secret-token;
 
 # 5. Reload OpenResty
 sudo systemctl reload openresty

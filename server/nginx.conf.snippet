@@ -10,10 +10,13 @@
 #   2. Place upload_handler.lua somewhere accessible, e.g.:
 #        sudo cp upload_handler.lua /etc/openresty/lua/upload_handler.lua
 #
-#   3. Add environment variables at the TOP of /etc/openresty/nginx.conf
+#   3. Generate a secure token (run in terminal):
+#        openssl rand -hex 32
+#
+#      Add environment variables at the TOP of /etc/openresty/nginx.conf
 #      (BEFORE the `http { }` block):
 #
-#        env FILEHOST_AUTH_TOKEN=your-secret-token-here;
+#        env FILEHOST_AUTH_TOKEN=your-generated-secret-token;
 #
 #      Optional overrides (defaults shown):
 #
