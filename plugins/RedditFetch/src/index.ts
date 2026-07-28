@@ -5,8 +5,8 @@ import { logger } from "@vendetta";
 
 import Settings from "./components/Settings";
 
-// Find necessary modules for sending/receiving messages
-const MessageSender = findByProps("sendMessage", "receiveMessage");
+const MessageSender = findByProps("sendMessage", "editMessage");
+const MessageActions = findByProps("receiveMessage", "sendClydeError") ?? findByProps("receiveMessage");
 const ChannelStore = findByProps("getLastSelectedChannelId");
 const BotMessageCreator = findByProps("createBotMessage");
 const BotAvatars = findByProps("BOT_AVATARS");
@@ -14,7 +14,7 @@ const BotAvatars = findByProps("BOT_AVATARS");
 // Helper to send local/bot messages
 function sendBotMessage(channelId: string, content: string, embeds: any[] = []) {
 	const cId = channelId ?? ChannelStore?.getChannelId?.() ?? ChannelStore?.getLastSelectedChannelId?.();
-	if (!BotMessageCreator || !MessageSender) return;
+	if (!BotMessageCreator || !MessageActions) return;
 
 	const msg = BotMessageCreator.createBotMessage({ channelId: cId, content: "", embeds });
 	
@@ -31,7 +31,7 @@ function sendBotMessage(channelId: string, content: string, embeds: any[] = []) 
 		Object.assign(msg, content);
 	}
 
-	MessageSender.receiveMessage(cId, msg);
+	MessageActions.receiveMessage(cId, msg);
 }
 
 const unpatches: (() => void)[] = [];
@@ -64,6 +64,14 @@ export default {
 					displayDescription: "Sort by best, hot, new, rising, top, controversial",
 					required: false,
 					type: 3,
+					choices: [
+						{ name: "best", displayName: "best", value: "best" },
+						{ name: "hot", displayName: "hot", value: "hot" },
+						{ name: "new", displayName: "new", value: "new" },
+						{ name: "rising", displayName: "rising", value: "rising" },
+						{ name: "top", displayName: "top", value: "top" },
+						{ name: "controversial", displayName: "controversial", value: "controversial" },
+					]
 				},
 				{
 					name: "silent",

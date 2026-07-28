@@ -12,7 +12,8 @@ const CloudUpload = findByProps("CloudUpload")?.CloudUpload;
 const MessageSender = findByProps("sendMessage", "editMessage");
 const UploadLimits = findByProps("getMaxFileSize");
 
-export let realMaxFileSize = 10 * 1024 * 1024; // fallback to 10MB
+const MB = 1024 * 1024;
+export let realMaxFileSize = 10 * MB; // fallback to 10MB
 
 export function patchUploadLimits(): (() => void) | undefined {
 	if (!UploadLimits?.getMaxFileSize) {
