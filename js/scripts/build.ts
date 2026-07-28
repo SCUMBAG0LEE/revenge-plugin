@@ -44,8 +44,7 @@ for (const dirent of plugins) {
 		entrypoints: [join(pluginSrcDir, "index.ts")],
 		outdir: pluginOutDir,
 		target: "browser",
-		format: "iife",
-		globalName: "plugin",
+		format: "cjs",
 		naming: "[name].[ext]",
 		minify: process.env.NODE_ENV === "production",
 		external: externals,
@@ -60,33 +59,21 @@ for (const dirent of plugins) {
 		continue;
 	}
 
-	// Post-process index.js so Vendetta's eval() can access the APIs
+	// Post-process index.js to ensure eval() captures the exports securely
 	const jsFile = Bun.file(join(pluginOutDir, "index.js"));
 	if (await jsFile.exists()) {
 		let jsText = await jsFile.text();
 		
-		// Replace Bun's globalThis lookups with Vendetta's actual globals
-		const globalMappings: Record<string, string> = {
-			"react": "window.vendetta.metro.common.React",
-			"react-native": "window.vendetta.metro.common.ReactNative",
-			"@vendetta/patcher": "window.vendetta.patcher",
-			"@vendetta/metro": "window.vendetta.metro",
-			"@vendetta/metro/common": "window.vendetta.metro.common",
-			"@vendetta/plugin": "window.vendetta.plugin",
-			"@vendetta/storage": "window.vendetta.storage",
-			"@vendetta/ui/toasts": "window.vendetta.ui.toasts",
-			"@vendetta/ui/assets": "window.vendetta.ui.assets",
-			"@vendetta/ui/components": "window.vendetta.ui.components",
-			"@vendetta/commands": "window.vendetta.commands",
-			"@vendetta": "window.vendetta"
-		};
-
-		for (const [ext, glob] of Object.entries(globalMappings)) {
-			jsText = jsText.replaceAll(`globalThis["${ext}"]`, glob);
-			jsText = jsText.replaceAll(`globalThis['${ext}']`, glob);
-		}
+		// Wrap the CJS bundle to guarantee module.exports exists and is returned by eval()
+		jsText = `
+var _module = { exports: {} };
+var _exports = _module.exports;
+(function(module, exports) {
+${jsText}
+})(_module, _exports);
+_module.exports;
+`;
 		
-		jsText = `${jsText}\nplugin;`;
 		await Bun.write(join(pluginOutDir, "index.js"), jsText);
 	}
 
