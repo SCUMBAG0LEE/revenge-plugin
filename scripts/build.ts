@@ -289,18 +289,18 @@ const htmlContent = `<!DOCTYPE html>
         <div class="plugin-grid">
             ${builtPlugins
                 .map(
-                    (p) => \`
+                    (p) => `
             <div class="card">
                 <div class="card-header">
-                    <span class="plugin-name">🧩 \${p.name}</span>
+                    <span class="plugin-name">🧩 ${p.name}</span>
                 </div>
-                <p class="plugin-desc">\${p.description}</p>
+                <p class="plugin-desc">${p.description}</p>
                 <div class="url-box">
-                    <input class="url-input" readonly value="https://scumbag0lee.github.io/revenge-plugin/\${p.folder}/" id="url-\${p.folder}">
-                    <button class="copy-btn" onclick="copyUrl('url-\${p.folder}', this)">Copy Link</button>
+                    <input class="url-input" readonly value="https://scumbag0lee.github.io/revenge-plugin/${p.folder}/" id="url-${p.folder}">
+                    <button class="copy-btn" onclick="copyUrl('url-${p.folder}', this)">Copy Link</button>
                 </div>
             </div>
-            \`
+            `
                 )
                 .join("")}
         </div>
