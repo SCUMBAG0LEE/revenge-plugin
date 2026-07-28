@@ -99,6 +99,7 @@ export function patchUploader(): (() => void) | undefined {
 					console.error("[VaultRelay] Upload error:", err);
 				});
 		}
+		});
 	} catch (err) {
 		console.error("[VaultRelay] Failed to patch CloudUpload:", err);
 		return undefined;
