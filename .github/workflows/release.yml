@@ -25,7 +25,10 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies
+      - name: Install dependencies (root)
+        run: bun install
+
+      - name: Install dependencies (js)
         run: cd js && bun install
 
       - name: Build
