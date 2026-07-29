@@ -1,5 +1,6 @@
 import { before, after } from "@vendetta/patcher";
 import { findByProps } from "@vendetta/metro";
+import { clipboard } from "@vendetta/metro/common";
 import { showToast } from "@vendetta/ui/toasts";
 import { storage } from "@vendetta/plugin";
 import { getAssetIDByName } from "@vendetta/ui/assets";
@@ -101,21 +102,22 @@ export function patchUploadLimits(): (() => void) | undefined {
 
 	if (FileUtils) {
 		try {
-			if (typeof FileUtils.maxFileSize === "function") {
-				unpatches.push(after("maxFileSize", FileUtils, () => Number.MAX_SAFE_INTEGER));
-			} else if (typeof FileUtils.maxFileSize === "number") {
-				const real = FileUtils.maxFileSize;
-				try { FileUtils.maxFileSize = Number.MAX_SAFE_INTEGER; } 
-				catch { Object.defineProperty(FileUtils, "maxFileSize", { value: Number.MAX_SAFE_INTEGER, writable: true, configurable: true }); }
-				unpatches.push(() => {
-					try { FileUtils.maxFileSize = real; } 
-					catch { Object.defineProperty(FileUtils, "maxFileSize", { value: real, writable: true, configurable: true }); }
-				});
+			for (const key of Object.keys(FileUtils)) {
+				if (typeof FileUtils[key] === "function") {
+					if (key.toLowerCase().includes("large")) unpatches.push(after(key, FileUtils, () => false));
+					if (key.toLowerCase().includes("max")) unpatches.push(after(key, FileUtils, () => Number.MAX_SAFE_INTEGER));
+				} else if (typeof FileUtils[key] === "number") {
+					if (key.toLowerCase().includes("max") || key.toLowerCase().includes("limit") || key.toLowerCase().includes("size")) {
+						const real = FileUtils[key];
+						try { FileUtils[key] = Number.MAX_SAFE_INTEGER; }
+						catch { Object.defineProperty(FileUtils, key, { value: Number.MAX_SAFE_INTEGER, writable: true, configurable: true }); }
+						unpatches.push(() => {
+							try { FileUtils[key] = real; }
+							catch { Object.defineProperty(FileUtils, key, { value: real, writable: true, configurable: true }); }
+						});
+					}
+				}
 			}
-
-			if (typeof FileUtils.anyFileTooLarge === "function") unpatches.push(after("anyFileTooLarge", FileUtils, () => false));
-			if (typeof FileUtils.uploadSumTooLarge === "function") unpatches.push(after("uploadSumTooLarge", FileUtils, () => false));
-			if (typeof FileUtils.getMaxRequestSize === "function") unpatches.push(after("getMaxRequestSize", FileUtils, () => Number.MAX_SAFE_INTEGER));
 		} catch (e) {}
 	}
 	
@@ -227,9 +229,8 @@ export function patchUploader(): (() => void) | undefined {
 							if (!injected) {
 								let copied = false;
 								try {
-									const Clipboard = findByProps("setString", "getString");
-									if (Clipboard && Clipboard.setString) {
-										Clipboard.setString(url);
+									if (clipboard && clipboard.setString) {
+										clipboard.setString(url);
 										showToast("📋 Link copied to clipboard!", getAssetIDByName("ic_message_copy"));
 										copied = true;
 									}
@@ -239,9 +240,9 @@ export function patchUploader(): (() => void) | undefined {
 								
 								if (!copied) {
 									try {
-										const Share = findByProps("share", "sharedAction");
-										if (Share && Share.share) {
-											Share.share({ message: url });
+										const { ReactNative } = require("@vendetta/metro/common");
+										if (ReactNative && ReactNative.Share && ReactNative.Share.share) {
+											ReactNative.Share.share({ message: url });
 										}
 									} catch (e) {
 										console.error("[VaultRelay] Share fallback error:", e);

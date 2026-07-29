@@ -41,11 +41,17 @@ export async function uploadToFileHost(
 	const targetUrl = `${serverUrl}/upload`;
 
 	try {
-		// We use fetch since RN's XMLHttpRequest can sometimes instantly drop FormData uploads
-		// Note: React Native's fetch doesn't support upload progress callbacks easily, 
-		// so we just simulate a starting progress event.
-		if (onProgress) onProgress(25);
+		let simulatedPct = 0;
+		let progressInterval: any;
 		
+		if (onProgress) {
+			progressInterval = setInterval(() => {
+				simulatedPct += (100 - simulatedPct) * 0.1; // Ease towards 99%
+				if (simulatedPct >= 99) simulatedPct = 99;
+				onProgress(simulatedPct);
+			}, 500);
+		}
+
 		const response = await fetch(targetUrl, {
 			method: "POST",
 			headers: {
@@ -53,6 +59,9 @@ export async function uploadToFileHost(
 			},
 			body: formData,
 		});
+
+		if (progressInterval) clearInterval(progressInterval);
+		if (onProgress) onProgress(100);
 
 		const text = await response.text();
 
