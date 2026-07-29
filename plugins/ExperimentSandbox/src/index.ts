@@ -31,30 +31,9 @@ export default {
 
 				let report = "**🧪 Advanced Sandbox Report**\n\n";
 
-				// Test 1: Real Message Sender (With Nonce)
-				try {
-					const MessageActions = findByProps("receiveMessage", "sendClydeError") ?? findByProps("receiveMessage");
-					const NonceMaker = findByProps("generateNonce");
-					
-					if (!MessageActions || !MessageActions.sendMessage) throw new Error("Could not find MessageActions.sendMessage");
-					
-					const nonce = NonceMaker?.generateNonce ? NonceMaker.generateNonce() : "123456789012345678";
-					
-					// Send a REAL message to the channel using MessageActions
-					MessageActions.sendMessage(cId, { 
-						content: "🧪 Hello from Advanced Sandbox! This test includes a nonce!", 
-						nonce: nonce,
-						validNonShortcutEmojis: [] 
-					});
-					report += `✅ \`real_msg\`: Executed MessageActions.sendMessage with nonce (check if message appeared!)\n`;
-				} catch (e: any) {
-					report += `❌ \`real_msg\` Failed: ${e.message}\n`;
-				}
-
-				// Test 2: VaultRelay HTML 500 Dump
+				// Test 1: VaultRelay Upload -> Send Link -> Chat Input Injection
 				try {
 					const formData = new FormData();
-					// In RN, passing a string to FormData acts as a regular form field, which might bypass file limits but still hit the server logic
 					formData.append("file", "This is a dummy string payload representing a file");
 					
 					const r = await fetch("https://xeon.systems/discord/upload", { 
@@ -65,12 +44,44 @@ export default {
 					
 					const text = await r.text();
 					if (r.status >= 500 || text.includes("<!DOCTYPE html>")) {
-						report += `❌ \`vault_upload\` Hit 500 Error!\n**HTML Response Dump:**\n\`\`\`html\n${text.substring(0, 1000)}\n\`\`\`\n`;
+						report += `❌ \`vault_combo\` Hit 500 Error!\n**HTML Dump:**\n\`\`\`html\n${text.substring(0, 500)}\n\`\`\`\n`;
+					} else if (r.ok) {
+						const json = JSON.parse(text);
+						report += `✅ \`vault_upload\`: Success! URL: ${json.url}\n`;
+						
+						// Test ComponentDispatch (Inject into Chat Box)
+						try {
+							const { ComponentDispatch } = findByProps("ComponentDispatch") || {};
+							if (ComponentDispatch && ComponentDispatch.dispatchToLastSubscribed) {
+								ComponentDispatch.dispatchToLastSubscribed("INSERT_TEXT", { plainText: `\n${json.url} ` });
+								report += `✅ \`chat_input\`: Injected URL into chat box!\n`;
+							} else {
+								report += `❌ \`chat_input\`: ComponentDispatch not found.\n`;
+							}
+						} catch (e: any) {
+							report += `❌ \`chat_input\` Crash: ${e.message}\n`;
+						}
+
+						// Test REST Message Sending
+						const TokenStore = findByProps("getToken");
+						const token = TokenStore?.getToken?.();
+						if (token) {
+							const restRes = await fetch(`https://discord.com/api/v9/channels/${cId}/messages`, {
+								method: "POST",
+								headers: { "Authorization": token, "Content-Type": "application/json" },
+								body: JSON.stringify({
+									content: `🧪 Sandbox Vault Combo Test! Uploaded file: ${json.url}`,
+									nonce: Math.floor(Math.random() * 1000000000000000).toString()
+								})
+							});
+							if (restRes.ok) report += `✅ \`real_msg\`: Sent via REST API!\n`;
+							else report += `❌ \`real_msg\` REST failed: HTTP ${restRes.status}\n`;
+						}
 					} else {
-						report += `✅ \`vault_upload\`: Status ${r.status}, response: ${text.substring(0, 200)}\n`;
+						report += `❌ \`vault_combo\`: Status ${r.status}, response: ${text.substring(0, 100)}\n`;
 					}
 				} catch (e: any) {
-					report += `❌ \`vault_upload\` Network Error: ${e.message}\n`;
+					report += `❌ \`vault_combo\` Network Error: ${e.message}\n`;
 				}
 
 				// Test 3: 15MB Payload to Pastebins

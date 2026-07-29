@@ -10,6 +10,8 @@ export interface PluginStorage {
 	maxFileSizeMB: number;
 	/** Whether to auto-upload without prompting. */
 	autoUpload: boolean;
+	/** Whether to automatically send the message after uploading, or just inject into chat box. */
+	autoSend: boolean;
 }
 
 const DEFAULTS: PluginStorage = {
@@ -17,6 +19,7 @@ const DEFAULTS: PluginStorage = {
 	apiToken: "",
 	maxFileSizeMB: -1,
 	autoUpload: true,
+	autoSend: true,
 };
 
 /**

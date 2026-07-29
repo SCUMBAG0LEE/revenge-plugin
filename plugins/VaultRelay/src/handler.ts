@@ -146,15 +146,44 @@ export function patchUploader(): (() => void) | undefined {
 
 			const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
 			if (typeof this.setStatus === "function") this.setStatus("CANCELED");
-			if (channelId) setTimeout(() => cleanup(channelId), 500);
+			if (channelId) {
+				setTimeout(() => {
+					try {
+						const MessageActions = findByProps("deleteMessage");
+						const MessageStore = findByProps("getMessages");
+						const msgs = MessageStore?.getMessages(channelId);
+						const arr = msgs?._array || msgs?.toArray?.() || Object.values(msgs || {});
+						const pending = arr.filter((m: any) => m && m.state === "SEND_FAILED");
+						
+						for (const msg of pending) {
+							MessageActions?.deleteMessage(channelId, msg.id);
+						}
+					} catch (err) {
+						// Ignore cleanup errors
+					}
+				}, 1000);
+			}
 
 			showToast(
 				`✅ Uploaded to VaultRelay!`,
 				getAssetIDByName("Check"),
 			);
 
-			if (channelId && MessageSender) {
-				MessageSender.sendMessage(channelId, { content: url });
+			if (channelId) {
+				if (cfg.autoSend) {
+					// Auto Send Enabled: Automatically send the message via REST
+					sendMessageAggressive(channelId, url);
+				} else {
+					// Auto Send Disabled: Inject directly into the chat input box!
+					try {
+						const { ComponentDispatch } = findByProps("ComponentDispatch") || {};
+						if (ComponentDispatch && ComponentDispatch.dispatchToLastSubscribed) {
+							ComponentDispatch.dispatchToLastSubscribed("INSERT_TEXT", { plainText: `\n${url} ` });
+						}
+					} catch (e) {
+						// Ignore dispatch errors
+					}
+				}
 			}
 		} catch (err: any) {
 			showToast(

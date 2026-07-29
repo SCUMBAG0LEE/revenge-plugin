@@ -52,6 +52,15 @@ export default function Settings() {
 						storage.autoUpload = val;
 					}}
 				/>
+
+				<FormSwitchRow
+					label="Auto Send Message"
+					subLabel="Send the uploaded link automatically. If disabled, pastes the link into your chat box instead."
+					value={storage.autoSend ?? true}
+					onValueChange={(val: boolean) => {
+						storage.autoSend = val;
+					}}
+				/>
 			</FormSection>
 		</ScrollView>
 	);

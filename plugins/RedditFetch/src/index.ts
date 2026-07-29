@@ -213,19 +213,7 @@ export default {
 					if (silent) {
 						sendBotMessage(ctx.channel.id, fallbackWarning, [embed]);
 					} else {
-						const MessageActions = findByProps("receiveMessage", "sendClydeError") ?? findByProps("receiveMessage");
-						const NonceMaker = findByProps("generateNonce");
-						
-						if (MessageActions && MessageActions.sendMessage) {
-							const nonce = NonceMaker?.generateNonce ? NonceMaker.generateNonce() : "123456789012345678";
-							MessageActions.sendMessage(ctx.channel.id, { 
-								content: fallbackWarning + (isImage ? imgUrl : `https://reddit.com${finalPost.permalink}`),
-								nonce: nonce,
-								validNonShortcutEmojis: []
-							});
-						} else {
-							showToast("MessageActions not found!", getAssetIDByName("ic_warning_24px"));
-						}
+						sendMessageAggressive(ctx.channel.id, fallbackWarning + (isImage ? imgUrl : `https://reddit.com${finalPost.permalink}`));
 					}
 				} catch (err: any) {
 					logger.log(err);
