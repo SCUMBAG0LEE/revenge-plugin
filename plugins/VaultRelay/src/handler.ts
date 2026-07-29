@@ -17,20 +17,35 @@ const MB = 1024 * 1024;
 export let realMaxFileSize = 10 * MB; // fallback to 10MB
 
 export function patchUploadLimits(): (() => void) | undefined {
-	if (!UploadLimits?.getMaxFileSize) {
+	const UploadLimits = findByProps("DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE");
+	if (!UploadLimits) {
 		console.warn("[VaultRelay] UploadLimits module not found — UI limit patching skipped");
 		return undefined;
 	}
 	
 	try {
-		return after("getMaxFileSize", UploadLimits, (args, res) => {
-			if (typeof res === "number") {
-				// Capture Discord's real upload limit (e.g. 10MB, 50MB, or 500MB depending on Nitro)
-				realMaxFileSize = res;
-			}
-			// Spoof the max file size so the UI allows selecting large files
-			return Number.MAX_SAFE_INTEGER;
+		// Store the real value before we overwrite it
+		const realLimit = UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE;
+		if (typeof realLimit === "number") {
+			realMaxFileSize = realLimit;
+		}
+
+		// Overwrite the property directly on the exported object.
+		// Since it's a static property and not a function, we can't use `after()`.
+		Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", {
+			value: Number.MAX_SAFE_INTEGER,
+			writable: true,
+			configurable: true
 		});
+
+		// Return an unpatch function that restores the original value
+		return () => {
+			Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", {
+				value: realLimit,
+				writable: true,
+				configurable: true
+			});
+		};
 	} catch (err) {
 		console.error("[VaultRelay] Failed to patch UploadLimits:", err);
 		return undefined;

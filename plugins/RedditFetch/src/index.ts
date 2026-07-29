@@ -131,7 +131,18 @@ export default {
 						}
 					}
 
-					const posts = json.data?.children?.filter((c: any) => c.data && !c.data.is_video && c.data.url);
+					const imageRegex = /\.(png|jpg|jpeg|gif|webp)$/i;
+					const isImageHost = (url: string) => url.includes("i.redd.it") || (url.includes("imgur.com") && !url.includes("/a/"));
+
+					const posts = json.data?.children?.filter((c: any) => {
+						if (!c.data || c.data.is_video) return false;
+						// Some subreddits use 'url_overridden_by_dest' for the actual media link
+						const url = c.data.url_overridden_by_dest || c.data.url;
+						if (!url) return false;
+						// Strict check to ensure the URL is actually an image
+						return imageRegex.test(url) || isImageHost(url);
+					});
+
 					if (!posts || posts.length === 0) {
 						sendBotMessage(ctx.channel.id, `❌ No suitable images found in r/${subreddit}.`);
 						return;
@@ -157,14 +168,10 @@ export default {
 						sendBotMessage(ctx.channel.id, "", [embed]);
 					} else {
 						const cId = ctx.channel?.id ?? ChannelStore?.getChannelId?.() ?? ChannelStore?.getLastSelectedChannelId?.();
-						const ActualSender = findByProps("sendMessage", "receiveMessage") ?? findByProps("sendMessage", "editMessage");
 						
-						if (ActualSender && cId) {
-							await ActualSender.sendMessage(cId, {
-								content: imgUrl,
-								validNonShortcutEmojis: [],
-								tts: false
-							});
+						if (MessageSender && cId) {
+							// Use the exact same simple structure that VaultRelay uses to send messages
+							MessageSender.sendMessage(cId, { content: imgUrl });
 						} else {
 							showToast("❌ Could not find MessageSender module or Channel ID!", getAssetIDByName("ic_warning_24px"));
 						}

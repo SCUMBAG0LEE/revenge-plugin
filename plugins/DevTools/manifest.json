@@ -1,6 +1,6 @@
 {
 	"name": "DevTools",
-	"description": "Essential developer tools for Vendetta, including /debug-props and /eval.",
+	"description": "The ultimate debugging utility. Seamlessly find, search, and dump internal modules with the unified /debug command.",
 	"authors": [{ "name": "SCUMBAG0LEE" }],
 	"main": "src/index.ts",
 	"vendetta": {

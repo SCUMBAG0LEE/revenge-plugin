@@ -40,11 +40,11 @@ export default {
 					required: false,
 					type: 3, // STRING
 					choices: [
-						{ name: "getMaxFileSize", displayName: "getMaxFileSize", value: "getMaxFileSize" },
-						{ name: "MAX_ATTACHMENT_SIZE", displayName: "MAX_ATTACHMENT_SIZE", value: "MAX_ATTACHMENT_SIZE" },
-						{ name: "getUploadFileSizeLimit", displayName: "getUploadFileSizeLimit", value: "getUploadFileSizeLimit" },
-						{ name: "UPLOAD_ATTACHMENT_MAX_SIZE", displayName: "UPLOAD_ATTACHMENT_MAX_SIZE", value: "UPLOAD_ATTACHMENT_MAX_SIZE" },
-						{ name: "CloudUpload", displayName: "CloudUpload", value: "CloudUpload" }
+						{ name: "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", displayName: "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", value: "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE" },
+						{ name: "CloudUpload", displayName: "CloudUpload", value: "CloudUpload" },
+						{ name: "sendMessage", displayName: "sendMessage", value: "sendMessage" },
+						{ name: "receiveMessage", displayName: "receiveMessage", value: "receiveMessage" },
+						{ name: "getCurrentUser", displayName: "getCurrentUser", value: "getCurrentUser" }
 					]
 				},
 				{
@@ -121,7 +121,7 @@ export default {
 
 						let resultText = "";
 						if (mode === "dump_all") {
-							// Ultra compact to prevent clipboard truncation
+							// Ultra compact
 							resultText = JSON.stringify(results.map(m => Object.keys(m)));
 						} else {
 							resultText = `✅ Found ${results.length} modules (Mode: ${mode}${query ? `, Query: ${query}` : ''}):\n\n`;
@@ -141,22 +141,49 @@ export default {
 						if (output === "clipboard") {
 							if (clipboard && clipboard.setString) {
 								clipboard.setString(resultText);
-								statusMsg.content = `✅ Debug process done! Result has been securely copied to your clipboard. (${results.length} modules found)`;
+								if (resultText.length > 150000) {
+									statusMsg.content = `⚠️ **Warning:** Output is ${resultText.length} bytes, which exceeds Android's clipboard limit and was likely truncated. Use \`output: file\` for massive dumps!\n\n✅ Copied to clipboard. (${results.length} modules found)`;
+								} else {
+									statusMsg.content = `✅ Debug process done! Result has been securely copied to your clipboard. (${results.length} modules found)`;
+								}
 							} else {
 								statusMsg.content = `❌ Clipboard API is not available on your client!`;
 							}
 							MessageActions.receiveMessage(cId, statusMsg);
 						} else if (output === "file") {
-							statusMsg.content = `✅ Debug process done! (${results.length} modules found)`;
-							statusMsg.attachments = [{
-								id: "1",
-								filename: `devtools_dump_${Date.now()}.txt`,
-								size: resultText.length,
-								url: `data:text/plain;charset=utf-8,${encodeURIComponent(resultText)}`,
-								proxy_url: `data:text/plain;charset=utf-8,${encodeURIComponent(resultText)}`,
-								content_type: "text/plain"
-							}];
-							MessageActions.receiveMessage(cId, statusMsg);
+							const RNFS = findByProps("writeFile", "DocumentDirectoryPath", "mkdir");
+							if (RNFS) {
+								const baseDir = (RNFS.DownloadDirectoryPath || RNFS.DocumentDirectoryPath);
+								const logsDir = `${baseDir}/DevTools Logs`;
+								
+								// Create descriptive filename based on mode and query
+								const dateStr = new Date().toISOString().replace(/T/, "_").replace(/[:.]/g, "-").split("Z")[0];
+								const safeQuery = query ? "_" + query.replace(/[^a-zA-Z0-9]/g, "").substring(0, 20) : "";
+								const filename = `dump_${mode}${safeQuery}_${dateStr}.json`;
+								const path = `${logsDir}/${filename}`;
+
+								// Ensure directory exists then write
+								const writeOp = RNFS.mkdir ? RNFS.mkdir(logsDir).then(() => RNFS.writeFile(path, resultText, "utf8")) : RNFS.writeFile(`${baseDir}/${filename}`, resultText, "utf8");
+
+								writeOp.then(() => {
+									statusMsg.content = `✅ Debug process done! Massive dump successfully saved to:\n\`${RNFS.mkdir ? path : `${baseDir}/${filename}`}\`\n(${results.length} modules found)`;
+									MessageActions.receiveMessage(cId, statusMsg);
+								}).catch((err: any) => {
+									statusMsg.content = `❌ Error writing file to disk: ${err.message}`;
+									MessageActions.receiveMessage(cId, statusMsg);
+								});
+							} else {
+								statusMsg.content = `✅ Debug process done! (RNFS not found, attempting legacy attachment...)`;
+								statusMsg.attachments = [{
+									id: "1",
+									filename: `devtools_dump_${Date.now()}.txt`,
+									size: resultText.length,
+									url: `data:text/plain;charset=utf-8,${encodeURIComponent(resultText)}`,
+									proxy_url: `data:text/plain;charset=utf-8,${encodeURIComponent(resultText)}`,
+									content_type: "text/plain"
+								}];
+								MessageActions.receiveMessage(cId, statusMsg);
+							}
 						} else {
 							// Chat chunking
 							statusMsg.content = `✅ Debug process done! Dumping to chat... (${results.length} modules found)`;
