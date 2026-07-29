@@ -30,6 +30,21 @@ const getMessageActions = () => {
 };
 
 const sendMessageAggressive = async (channelId: string, content: string) => {
+	// 1. Try REST API First (Most reliable on RN 0.81.4)
+	try {
+		const TokenStore = findByProps("getToken");
+		const token = TokenStore?.getToken?.();
+		if (token) {
+			const restRes = await fetch(`https://discord.com/api/v9/channels/${channelId}/messages`, {
+				method: "POST",
+				headers: { "Authorization": token, "Content-Type": "application/json" },
+				body: JSON.stringify({ content, nonce: Math.floor(Math.random() * 1000000000000000).toString() })
+			});
+			if (restRes.ok) return { ok: true };
+		}
+	} catch (e) {}
+
+	// 2. Fallback to Internal Modules
 	const MA = getMessageActions();
 	if (!MA) return { ok: false };
 	const msgObj = { content };
@@ -53,20 +68,6 @@ const sendMessageAggressive = async (channelId: string, content: string) => {
 			return { ok: true };
 		} catch (e) {}
 	}
-	
-	// REST API Fallback
-	try {
-		const TokenStore = findByProps("getToken");
-		const token = TokenStore?.getToken?.();
-		if (token) {
-			const restRes = await fetch(`https://discord.com/api/v9/channels/${channelId}/messages`, {
-				method: "POST",
-				headers: { "Authorization": token, "Content-Type": "application/json" },
-				body: JSON.stringify({ content, nonce: Math.floor(Math.random() * 1000000000000000).toString() })
-			});
-			if (restRes.ok) return { ok: true };
-		}
-	} catch (e) {}
 	
 	return { ok: false };
 };
@@ -241,7 +242,7 @@ export function patchUploader(): (() => void) | undefined {
 						doVaultUpload();
 						if (typeof this.setStatus === "function") this.setStatus("CANCELED");
 						if (typeof this.cancel === "function") this.cancel();
-						resolve(undefined);
+						resolve(null);
 					},
 					onCancel: () => {
 						resolve(originalUpload.apply(this, args));
@@ -253,7 +254,7 @@ export function patchUploader(): (() => void) | undefined {
 		doVaultUpload();
 		if (typeof this.setStatus === "function") this.setStatus("CANCELED");
 		if (typeof this.cancel === "function") this.cancel();
-		return Promise.resolve(); // Resolve cleanly so queue isn't blocked
+		return null; // Return null so Discord gracefully aborts the native upload
 	};
 
 	return () => {

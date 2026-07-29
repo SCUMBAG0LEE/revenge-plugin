@@ -41,6 +41,21 @@ const getMessageActions = () => {
 };
 
 const sendMessageAggressive = async (channelId: string, content: string) => {
+	// 1. Try REST API First (Most reliable on RN 0.81.4)
+	try {
+		const TokenStore = findByProps("getToken");
+		const token = TokenStore?.getToken?.();
+		if (token) {
+			const restRes = await fetch(`https://discord.com/api/v9/channels/${channelId}/messages`, {
+				method: "POST",
+				headers: { "Authorization": token, "Content-Type": "application/json" },
+				body: JSON.stringify({ content, nonce: Math.floor(Math.random() * 1000000000000000).toString() })
+			});
+			if (restRes.ok) return { ok: true };
+		}
+	} catch (e) {}
+
+	// 2. Fallback to Internal Modules
 	const MA = getMessageActions();
 	if (!MA) return { ok: false };
 	const msgObj = { content };
@@ -68,20 +83,6 @@ const sendMessageAggressive = async (channelId: string, content: string) => {
 			}
 		} catch (e) {}
 	}
-
-	// REST API Fallback
-	try {
-		const TokenStore = findByProps("getToken");
-		const token = TokenStore?.getToken?.();
-		if (token) {
-			const restRes = await fetch(`https://discord.com/api/v9/channels/${channelId}/messages`, {
-				method: "POST",
-				headers: { "Authorization": token, "Content-Type": "application/json" },
-				body: JSON.stringify({ content, nonce: Math.floor(Math.random() * 1000000000000000).toString() })
-			});
-			if (restRes.ok) return { ok: true };
-		}
-	} catch (e) {}
 
 	return { ok: false };
 };
