@@ -4,7 +4,7 @@
 	"authors": [{ "name": "SCUMBAG0LEE" }],
 	"main": "src/index.ts",
 	"vendetta": {
-		"icon": "ic_bug",
+		"icon": "ic_cog",
 		"original": "scumbag0lee.github.io/revenge-plugin/DevTools/"
 	}
 }

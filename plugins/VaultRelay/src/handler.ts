@@ -94,14 +94,20 @@ export function patchUploadLimits(): (() => void) | undefined {
 		} catch (err) { }
 	}
 
-	if (PremiumUtils && typeof PremiumUtils.getUserMaxFileSize === "function") {
-		try {
-			unpatches.push(after("getUserMaxFileSize", PremiumUtils, () => Number.MAX_SAFE_INTEGER));
-		} catch (e) {}
-	}
+
 
 	if (FileUtils) {
 		try {
+			if (typeof FileUtils.makeFile === "function") {
+				unpatches.push(after("makeFile", FileUtils, (_, ret) => {
+					if (ret && typeof ret.size === "number") {
+						ret._realSize = ret.size;
+						ret.size = 1000;
+					}
+					return ret;
+				}));
+			}
+
 			for (const key of Object.keys(FileUtils)) {
 				if (typeof FileUtils[key] === "function") {
 					if (key.toLowerCase().includes("large")) unpatches.push(after(key, FileUtils, () => false));
@@ -160,6 +166,8 @@ function cleanup(channelId: string) {
 	}, 500);
 }
 
+import { showConfirmationAlert } from "@vendetta/ui/alerts";
+
 export function patchUploader(): (() => void) | undefined {
 	if (!CloudUpload) {
 		console.warn("[VaultRelay] CloudUpload module not found — upload patching skipped");
@@ -169,23 +177,32 @@ export function patchUploader(): (() => void) | undefined {
 	const originalUpload = CloudUpload.prototype.reactNativeCompressAndExtractData;
 	if (!originalUpload) return undefined;
 
-	let showConfirmationAlert: any;
-	try {
-		showConfirmationAlert = findByProps("showConfirmationAlert")?.showConfirmationAlert;
-	} catch (e) {}
-
 	CloudUpload.prototype.reactNativeCompressAndExtractData = async function (...args: any[]) {
 		const file = this;
-		let size = file?.preCompressionSize ?? file?.size ?? file?.currentSize;
+		let size = file?._realSize ?? file?.preCompressionSize ?? file?.size ?? file?.currentSize;
 		if (typeof size !== "number" || size === 0) size = Number.MAX_SAFE_INTEGER;
 		
 		const cfg = storage as unknown as PluginStorage;
 		const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
+		
+		let dynamicRealLimit = realMaxFileSize;
+		try {
+			const UserStore = findByProps("getCurrentUser");
+			const PremiumUtils = findByProps("getUserMaxFileSize");
+			if (UserStore && PremiumUtils) {
+				const user = UserStore.getCurrentUser();
+				if (user) {
+					const limit = PremiumUtils.getUserMaxFileSize(user);
+					if (typeof limit === "number") dynamicRealLimit = limit;
+				}
+			}
+		} catch (e) {}
+
 		const manualSetting = cfg.maxFileSizeMB ?? -1;
-		const userLimitBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
+		const userLimitBytes = manualSetting < 0 ? dynamicRealLimit : (manualSetting * MB);
 
 		const exceedsUserLimit = size > userLimitBytes;
-		const exceedsDiscordLimit = size > realMaxFileSize;
+		const exceedsDiscordLimit = size > dynamicRealLimit;
 
 		// If it doesn't exceed the user's limit and it doesn't exceed Discord's hard limit, let Discord handle it.
 		if (!exceedsUserLimit && !exceedsDiscordLimit) {
@@ -202,9 +219,9 @@ export function patchUploader(): (() => void) | undefined {
 			this.size = 1337;
 			(async () => {
 				try {
-					showToast(`📤 Starting upload process...`, getAssetIDByName("ic_upload"));
+					showToast(`📤 Starting upload process...`);
 					const uploadInterval = setInterval(() => {
-						showToast(`📤 Uploading...`, getAssetIDByName("ic_upload"));
+						showToast(`📤 Uploading...`);
 					}, 4000);
 					
 					let url: string;
@@ -217,7 +234,7 @@ export function patchUploader(): (() => void) | undefined {
 					if (typeof this.setStatus === "function") this.setStatus("CANCELED");
 					if (typeof this.cancel === "function") this.cancel();
 					if (channelId) cleanup(channelId);
-					showToast(`✅ Uploading finished!`, getAssetIDByName("Check"));
+					showToast(`✅ Uploading finished!`);
 					
 					if (channelId) {
 						if (cfg.autoSend) {
@@ -227,7 +244,7 @@ export function patchUploader(): (() => void) | undefined {
 							try {
 								if (clipboard && clipboard.setString) {
 									clipboard.setString(url);
-									showToast("📋 Link copied to clipboard!", getAssetIDByName("ic_message_copy"));
+									showToast("📋 Link copied to clipboard!");
 									copied = true;
 								}
 							} catch (e) {

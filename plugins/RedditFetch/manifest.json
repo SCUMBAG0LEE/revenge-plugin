@@ -4,7 +4,7 @@
 	"authors": [{ "name": "SCUMBAG0LEE" }],
 	"main": "src/index.ts",
 	"vendetta": {
-		"icon": "ic_reaction_smile",
+		"icon": "ic_image",
 		"original": "scumbag0lee.github.io/revenge-plugin/RedditFetch/"
 	}
 }

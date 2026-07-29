@@ -3,7 +3,7 @@ import { useProxy } from "@vendetta/storage";
 import { storage } from "@vendetta/plugin";
 import { Forms } from "@vendetta/ui/components";
 
-const { FormSection, FormInput, FormSwitchRow } = Forms;
+const { FormSection, FormInput, FormSwitchRow, FormRow } = Forms;
 const { ScrollView } = ReactNative;
 
 export default function Settings() {
@@ -33,7 +33,7 @@ export default function Settings() {
 
 				<FormInput
 					title="Max File Size (MB)"
-					placeholder="<0 for Auto, 0 for Always"
+					placeholder="<0 for auto, 0 for always"
 					value={String(storage.maxFileSizeMB ?? -1)}
 					onChange={(val: string) => {
 						const n = Number.parseInt(val, 10);
@@ -42,6 +42,10 @@ export default function Settings() {
 						}
 					}}
 					keyboardType="numeric"
+				/>
+				<FormRow 
+					label=""
+					subLabel="Set to < 0 for 10MB default, 0 to always upload to VaultRelay, or e.g. 50 for Nitro."
 				/>
 
 				<FormSwitchRow
