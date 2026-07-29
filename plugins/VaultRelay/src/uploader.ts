@@ -35,7 +35,7 @@ export async function uploadToFileHost(
 		type: file.type || (file as any).mime || "application/octet-stream",
 	} as any);
 
-	let serverUrl = storage.serverUrl || "https://megumin.me/grimoire";
+	let serverUrl = storage.serverUrl || "https://xeon.systems/discord";
 	if (serverUrl.endsWith("/")) serverUrl = serverUrl.slice(0, -1);
 	
 	const targetUrl = `${serverUrl}/upload`;

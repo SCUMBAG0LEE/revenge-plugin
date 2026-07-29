@@ -15,8 +15,8 @@ export default function Settings() {
 			<FormSection title="Misc Settings" style={{ marginTop: 12 }}>
 				<FormInput
 					title="Default Subreddit"
-					placeholder="Megumin"
-					value={storage.defaultSubreddit ?? "Megumin"}
+					placeholder="pics"
+					value={storage.defaultSubreddit ?? "pics"}
 					onChange={(val: string) => {
 						storage.defaultSubreddit = val;
 					}}

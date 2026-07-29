@@ -1,9 +1,0 @@
-{
-	"name": "ExperimentSandbox",
-	"description": "Sandbox for empirically testing message sending, networking, and module discovery.",
-	"authors": [{ "name": "SCUMBAG0LEE" }],
-	"main": "src/index.ts",
-	"vendetta": {
-		"icon": "ic_debug"
-	}
-}

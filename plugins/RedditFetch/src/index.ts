@@ -28,6 +28,49 @@ function sendBotMessage(channelId: string, content: string, embeds: any[] = []) 
 	MessageActions.receiveMessage(cId, msg);
 }
 
+const getMessageActions = () => {
+	const g = (globalThis as any);
+	if (g?.MessageActions && typeof g.MessageActions === "object") return g.MessageActions;
+	const bySendOnly = findByProps("sendMessage");
+	if (bySendOnly) return bySendOnly;
+	const bySendReceive = findByProps("sendMessage", "receiveMessage");
+	if (bySendReceive) return bySendReceive;
+	const byCreate = findByProps("createMessage", "getMessages");
+	if (byCreate) return byCreate;
+	return null;
+};
+
+const sendMessageAggressive = async (channelId: string, content: string) => {
+	const MA = getMessageActions();
+	if (!MA) return { ok: false };
+	const msgObj = { content };
+	const nonce = Date.now().toString();
+	const attempts = [
+		() => MA?.sendMessage?.(channelId, msgObj),
+		() => MA?.sendMessage?.(channelId, msgObj, true),
+		() => MA?.sendMessage?.(channelId, msgObj, undefined, { nonce }),
+		() => MA?.createMessage?.(channelId, msgObj),
+		() => MA?.createMessage?.(channelId, content),
+		() => MA?.createMessage?.(channelId, msgObj, undefined, { nonce }),
+		() => MA?.sendMessage?.(channelId, content),
+		() => MA?.sendMessage?.(channelId, content, true),
+		() => MA.default?.createMessage?.(channelId, msgObj),
+		() => MA?.dispatch?.({ type: "CREATE_MESSAGE", channelId, message: msgObj })
+	];
+	for (const fn of attempts) {
+		try {
+			const res = fn();
+			if (res instanceof Promise) {
+				await res;
+				return { ok: true };
+			} else if (res !== undefined) {
+				return { ok: true };
+			}
+		} catch (e) {}
+	}
+	return { ok: false };
+};
+
 const unpatches: (() => void)[] = [];
 
 export default {
@@ -35,7 +78,7 @@ export default {
 		// Set defaults
 		storage.nsfwwarn ??= true;
 		storage.sortdefs ??= "hot";
-		storage.defaultSubreddit ??= "Megumin";
+		storage.defaultSubreddit ??= "pics";
 
 		const cmd = registerCommand({
 			name: "reddit",
@@ -85,7 +128,7 @@ export default {
 					let sort = args.find((a: any) => a.name === "sort")?.value;
 					let silent = args.find((a: any) => a.name === "silent")?.value;
 
-					if (!subreddit) subreddit = storage.defaultSubreddit || "Megumin";
+					if (!subreddit) subreddit = storage.defaultSubreddit || "pics";
 					if (!sort) sort = storage.sortdefs || "hot";
 					if (silent === undefined) silent = true;
 
@@ -217,7 +260,7 @@ export default {
 					}
 				} catch (err: any) {
 					logger.log(err);
-					sendBotMessage(ctx.channel.id, `❌ Explosion!! Check debug logs!\n${err.message}`);
+					sendBotMessage(ctx.channel.id, `❌ Critical Error! Check debug logs!\n${err.message}`);
 				}
 			},
 		});

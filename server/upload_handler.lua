@@ -15,13 +15,13 @@ local cjson = require("cjson.safe")
 -- ── Configuration (all overridable via nginx `env` directives) ──────
 --
 --   env FILEHOST_AUTH_TOKEN=your-secret-token;
---   env FILEHOST_UPLOAD_DIR=/var/www/uploads/grimoire/;
---   env FILEHOST_PUBLIC_PATH=/grimoire/;
+--   env FILEHOST_UPLOAD_DIR=/var/www/discord/;
+--   env FILEHOST_PUBLIC_PATH=/discord/;
 --   env FILEHOST_CHUNK_SIZE=8192;
 --
 -- ────────────────────────────────────────────────────────────────────
-local upload_dir   = os.getenv("FILEHOST_UPLOAD_DIR")   or "/var/www/uploads/grimoire/"
-local public_path  = os.getenv("FILEHOST_PUBLIC_PATH")  or "/grimoire/"
+local upload_dir   = os.getenv("FILEHOST_UPLOAD_DIR")   or "/var/www/discord/"
+local public_path  = os.getenv("FILEHOST_PUBLIC_PATH")  or "/discord/"
 local auth_token   = os.getenv("FILEHOST_AUTH_TOKEN")   or "CHANGE_ME"
 local chunk_size   = tonumber(os.getenv("FILEHOST_CHUNK_SIZE")) or 8192
 
@@ -141,7 +141,7 @@ if not filename then
 end
 
 local scheme = ngx.var.scheme or "https"
-local host   = ngx.var.host  or "megumin.me"
+local host   = ngx.var.host  or "xeon.systems"
 local url    = scheme .. "://" .. host .. public_path .. filename
 
 ngx.status = 200

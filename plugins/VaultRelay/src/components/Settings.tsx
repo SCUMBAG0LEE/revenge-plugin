@@ -14,8 +14,8 @@ export default function Settings() {
 			<FormSection title="VaultRelay Settings" style={{ marginTop: 12 }}>
 				<FormInput
 					title="Server URL"
-					placeholder="https://megumin.me/grimoire"
-					value={storage.serverUrl ?? "https://megumin.me/grimoire"}
+					placeholder="https://xeon.systems/discord"
+					value={storage.serverUrl ?? "https://xeon.systems/discord"}
 					onChange={(val: string) => {
 						storage.serverUrl = val.replace(/\/+$/, "");
 					}}

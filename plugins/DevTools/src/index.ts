@@ -1,6 +1,8 @@
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findAll } from "@vendetta/metro";
 import { clipboard } from "@vendetta/metro/common";
+import { storage } from "@vendetta/plugin";
+import Settings from "./components/Settings";
 
 const MessageActions = findByProps("receiveMessage", "sendClydeError") ?? findByProps("receiveMessage");
 const ChannelStore = findByProps("getLastSelectedChannelId");
@@ -133,43 +135,67 @@ export default {
 
 						if (output === "share") {
 							if (resultText.length > 500000) {
-								statusMsg.content = `⏳ Output is very large (${(resultText.length / 1024 / 1024).toFixed(2)} MB). Chunking and uploading to pastebins...`;
-								MessageActions.receiveMessage(cId, statusMsg);
+								const serverUrl = storage.serverUrl as string | undefined;
+								const apiToken = storage.apiToken as string | undefined;
 
-								const tryUpload = async () => {
-									const chunkSize = 3 * 1024 * 1024; // 3MB chunks to bypass 413 errors
-									const chunks = resultText.match(new RegExp(`[\\s\\S]{1,${chunkSize}}`, 'g')) || [];
-									const urls: string[] = [];
-									
-									for (let i = 0; i < chunks.length; i++) {
-										statusMsg.content = `⏳ Uploading chunk ${i + 1} of ${chunks.length}...`;
-										MessageActions.receiveMessage(cId, statusMsg);
-										
-										const r = await fetch("https://haste.zneix.eu/documents", { method: "POST", body: chunks[i] });
-										if (!r.ok) throw new Error(`Chunk ${i+1} failed: HTTP ${r.status}`);
-										const json = await r.json();
-										urls.push(`https://haste.zneix.eu/${json.key}`);
-									}
-									return urls.join("\n");
-								};
-
-								tryUpload().then((shareUrls) => {
-									const { Share } = findByProps("Share") || require("react-native");
-									if (Share?.share) {
-										statusMsg.content = `✅ Debug process done! Opening OS Share menu with paste URLs...`;
-										MessageActions.receiveMessage(cId, statusMsg);
-										Share.share({ message: shareUrls }).catch((err: any) => {
-											statusMsg.content = `❌ Share failed: ${err.message}\nURLs:\n${shareUrls}`;
-											MessageActions.receiveMessage(cId, statusMsg);
-										});
-									} else {
-										statusMsg.content = `✅ Uploaded successfully:\n${shareUrls}`;
-										MessageActions.receiveMessage(cId, statusMsg);
-									}
-								}).catch((err: any) => {
-									statusMsg.content = `❌ Upload failed: ${err.message}`;
+								if (serverUrl && apiToken) {
+									statusMsg.content = `⏳ Output is very large (${(resultText.length / 1024 / 1024).toFixed(2)} MB). Uploading to your VaultRelay server...`;
 									MessageActions.receiveMessage(cId, statusMsg);
-								});
+
+									const formData = new FormData();
+									// In React Native, we can trick FormData into sending a filename by passing an object with string, type, and name
+									formData.append("file", { string: resultText, type: "text/plain", name: "dump_all.txt" } as any);
+
+									fetch(`${serverUrl}/upload`, {
+										method: "POST",
+										headers: { "Authorization": `Bearer ${apiToken}` },
+										body: formData
+									}).then(r => r.json()).then(json => {
+										statusMsg.content = `✅ Uploaded to VaultRelay!\n${json.url}`;
+										MessageActions.receiveMessage(cId, statusMsg);
+									}).catch((err: any) => {
+										statusMsg.content = `❌ VaultRelay upload failed: ${err.message}`;
+										MessageActions.receiveMessage(cId, statusMsg);
+									});
+								} else {
+									statusMsg.content = `⏳ Output is very large (${(resultText.length / 1024 / 1024).toFixed(2)} MB). Chunking and uploading to pastebins...\n(Tip: Configure your VaultRelay server in DevTools settings to upload it as a single file!)`;
+									MessageActions.receiveMessage(cId, statusMsg);
+
+									const tryUpload = async () => {
+										const chunkSize = 3 * 1024 * 1024; // 3MB chunks to bypass 413 errors
+										const chunks = resultText.match(new RegExp(`[\\s\\S]{1,${chunkSize}}`, 'g')) || [];
+										const urls: string[] = [];
+										
+										for (let i = 0; i < chunks.length; i++) {
+											statusMsg.content = `⏳ Uploading chunk ${i + 1} of ${chunks.length}...`;
+											MessageActions.receiveMessage(cId, statusMsg);
+											
+											const r = await fetch("https://haste.zneix.eu/documents", { method: "POST", body: chunks[i] });
+											if (!r.ok) throw new Error(`Chunk ${i+1} failed: HTTP ${r.status}`);
+											const json = await r.json();
+											urls.push(`https://haste.zneix.eu/${json.key}`);
+										}
+										return urls.join("\n");
+									};
+
+									tryUpload().then((shareUrls) => {
+										const { Share } = findByProps("Share") || require("react-native");
+										if (Share?.share) {
+											statusMsg.content = `✅ Debug process done! Opening OS Share menu with paste URLs...`;
+											MessageActions.receiveMessage(cId, statusMsg);
+											Share.share({ message: shareUrls }).catch((err: any) => {
+												statusMsg.content = `❌ Share failed: ${err.message}\nURLs:\n${shareUrls}`;
+												MessageActions.receiveMessage(cId, statusMsg);
+											});
+										} else {
+											statusMsg.content = `✅ Uploaded successfully:\n${shareUrls}`;
+											MessageActions.receiveMessage(cId, statusMsg);
+										}
+									}).catch((err: any) => {
+										statusMsg.content = `❌ Upload failed: ${err.message}`;
+										MessageActions.receiveMessage(cId, statusMsg);
+									});
+								}
 							} else {
 								const { Share } = findByProps("Share") || require("react-native");
 								if (Share?.share) {
@@ -209,5 +235,6 @@ export default {
 	onUnload() {
 		for (const unpatch of unpatches) unpatch();
 		unpatches.length = 0;
-	}
+	},
+	settings: Settings
 };

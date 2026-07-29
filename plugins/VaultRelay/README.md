@@ -7,7 +7,7 @@ A high-performance self-hosted file uploader plugin for **Discord Revenge** that
 ## ✨ Features
 
 - **Auto-intercept** — Automatically detects attachments exceeding Discord's file size limit (e.g. 10 MB).
-- **Self-hosted** — Upload to your own server (e.g. `https://megumin.me/grimoire`) with zero third-party reliance.
+- **Self-hosted** — Upload to your own server (e.g. `https://xeon.systems/discord`) with zero third-party reliance.
 - **Secure** — Bearer token authentication prevents unauthorized uploads.
 - **Ultra-Fast** — OpenResty (Nginx + Lua) streams uploads directly to disk with zero buffering.
 - **UI State Cleanup** — Automatically deletes native Discord "Upload Failed" messages to prevent UI clutter when intercepting attachments.
@@ -20,8 +20,8 @@ See the `server/` directory in the root of this repository for the required conf
 
 ```bash
 # 1. Create upload directory
-sudo mkdir -p /var/www/uploads/grimoire
-sudo chown www-data:www-data /var/www/uploads/grimoire
+sudo mkdir -p /var/www/discord
+sudo chown www-data:www-data /var/www/discord
 
 # 2. Copy Lua handler
 sudo cp server/upload_handler.lua /etc/openresty/lua/upload_handler.lua
@@ -43,7 +43,7 @@ sudo systemctl reload openresty
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Server URL | `https://megumin.me/grimoire` | Your upload server endpoint |
+| Server URL | `https://xeon.systems/discord` | Your upload server endpoint |
 | API Token | *(empty)* | Bearer token for authentication |
 | Max File Size (MB) | `10` | Files larger than this are auto-uploaded |
 | Auto Upload | `true` | Upload automatically without prompting |

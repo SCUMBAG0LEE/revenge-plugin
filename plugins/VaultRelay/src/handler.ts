@@ -96,6 +96,42 @@ export function patchUploadLimits(): (() => void) | undefined {
 	}
 }
 
+function cleanup(channelId: string) {
+	let attempts = 0;
+	const interval = setInterval(() => {
+		attempts++;
+		if (attempts > 10) {
+			clearInterval(interval);
+			return; // Give up after 5 seconds
+		}
+		try {
+			const pending = PendingMessages?.getPendingMessages?.(channelId);
+			if (!pending) return;
+
+			let deletedAny = false;
+			const MessageActions = findByProps("deleteMessage");
+			
+			for (const [messageId, message] of Object.entries(pending)) {
+				if ((message as any).state === "FAILED" || (message as any).state === "SEND_FAILED") {
+					// Nuke it from the pending queue to bypass mods
+					try { PendingMessages?.deletePendingMessage?.(channelId, messageId); } catch (e) {}
+					// Nuke it from the actual message store just in case
+					try { MessageActions?.deleteMessage?.(channelId, messageId); } catch (e) {}
+					console.log(`[VaultRelay] Deleted failed message: ${messageId}`);
+					deletedAny = true;
+				}
+			}
+			
+			if (deletedAny) {
+				clearInterval(interval);
+			}
+		} catch (err) {
+			console.warn("[VaultRelay] Failed to delete pending messages:", err);
+			clearInterval(interval);
+		}
+	}, 500);
+}
+
 export function patchUploader(): (() => void) | undefined {
 	if (!CloudUpload) {
 		console.warn("[VaultRelay] CloudUpload module not found — upload patching skipped");
@@ -118,9 +154,15 @@ export function patchUploader(): (() => void) | undefined {
 		const cfg = storage as unknown as PluginStorage;
 		const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
 		const manualSetting = cfg.maxFileSizeMB ?? -1;
-		const maxBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
+		const userLimitBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
 
-		if (size <= maxBytes) return originalUpload.apply(this, args);
+		const exceedsUserLimit = size > userLimitBytes;
+		const exceedsDiscordLimit = size > realMaxFileSize;
+
+		// If it doesn't exceed the user's limit and it doesn't exceed Discord's hard limit, let Discord handle it.
+		if (!exceedsUserLimit && !exceedsDiscordLimit) {
+			return originalUpload.apply(this, args);
+		}
 
 		if (!cfg.apiToken) {
 			showToast("⚠️ VaultRelay: Missing API Token!", getAssetIDByName("ic_warning_24px"));
@@ -136,18 +178,7 @@ export function patchUploader(): (() => void) | undefined {
 						if (pct % 25 === 0) showToast(`📤 Uploading... ${pct}%`, getAssetIDByName("ic_upload"));
 					});
 					if (typeof this.setStatus === "function") this.setStatus("CANCELED");
-					if (channelId) {
-						setTimeout(() => {
-							try {
-								const MessageActions = findByProps("deleteMessage");
-								const MessageStore = findByProps("getMessages");
-								const msgs = MessageStore?.getMessages(channelId);
-								const arr = msgs?._array || msgs?.toArray?.() || Object.values(msgs || {});
-								const pending = arr.filter((m: any) => m && m.state === "SEND_FAILED");
-								for (const msg of pending) MessageActions?.deleteMessage(channelId, msg.id);
-							} catch (err) {}
-						}, 1000);
-					}
+					if (channelId) cleanup(channelId);
 					showToast(`✅ Uploaded to VaultRelay!`, getAssetIDByName("Check"));
 					if (channelId) {
 						if (cfg.autoSend) {
@@ -163,23 +194,30 @@ export function patchUploader(): (() => void) | undefined {
 					}
 				} catch (err: any) {
 					showToast(`❌ Upload Failed: ${err.message}`, getAssetIDByName("ic_warning_24px"));
+					if (channelId) cleanup(channelId);
 				}
 			})();
 		};
 
 		if (!cfg.autoUpload && showConfirmationAlert) {
+			// If it only exceeded Discord's limit (meaning the user set a custom limit higher than Discord allows)
+			// we explain this in the prompt to avoid confusion.
+			const reason = exceedsDiscordLimit && !exceedsUserLimit
+				? `This file (${(size / MB).toFixed(1)}MB) exceeds Discord's hard limit of ${(realMaxFileSize / MB).toFixed(1)}MB.`
+				: `This file (${(size / MB).toFixed(1)}MB) exceeds your VaultRelay size limit.`;
+				
 			showConfirmationAlert({
 				title: "Upload to VaultRelay?",
-				content: `This file is oversized (${(size / MB).toFixed(1)}MB). Do you want to intercept and upload it to your VaultRelay server instead?`,
+				content: `${reason} Do you want to intercept and upload it to your VaultRelay server instead?`,
 				confirmText: "Upload",
 				cancelText: "Cancel",
 				onConfirm: () => doVaultUpload()
 			});
-			return null; // Return null so original upload is cancelled
+			return new Promise(() => {}); // Wait forever to prevent Discord error modal
 		}
 
 		doVaultUpload();
-		return null;
+		return new Promise(() => {}); // Wait forever to prevent Discord error modal
 	};
 
 	return () => {
@@ -194,15 +232,15 @@ export function patchMessageSender(): (() => void) | undefined {
 		return before("sendMessage", MessageSender, (args: any[]) => {
 			const cfg = storage as unknown as PluginStorage;
 			const manualSetting = cfg.maxFileSizeMB ?? -1;
-			const maxBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
+			const userLimitBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
 			const message = args[1];
 
 			if (!cfg.apiToken || !message?.attachments?.length) return;
 
-			const oversized = message.attachments.filter((a: any) => a.size && a.size > maxBytes);
+			const oversized = message.attachments.filter((a: any) => a.size && (a.size > userLimitBytes || a.size > realMaxFileSize));
 			if (oversized.length === 0) return;
 
-			message.attachments = message.attachments.filter((a: any) => !a.size || a.size <= maxBytes);
+			message.attachments = message.attachments.filter((a: any) => !a.size || (a.size <= userLimitBytes && a.size <= realMaxFileSize));
 			const channelId = args[0];
 
 			for (const file of oversized) {

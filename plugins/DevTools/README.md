@@ -11,7 +11,7 @@ A powerful developer plugin for the **Discord Revenge** client. This plugin equi
     - `exact`: Finds a module matching your exact property name.
     - `dump_all`: Literally dumps every single Discord module in memory.
   - **`output`**: 
-    - `share`: Outputs to the OS Share menu. Massive outputs (e.g. `dump_all`) are automatically securely uploaded to `paste.gg` to prevent Android intent size limits!
+    - `share`: Outputs to the OS Share menu. Massive outputs (e.g. `dump_all`) are automatically securely uploaded to your configured VaultRelay server (or public pastebins as fallback) to prevent Android intent size limits!
     - `chat`: Chunks the output into 1900-character segments directly in the chat view.
 
 ## 📥 Installation

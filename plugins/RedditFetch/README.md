@@ -15,7 +15,7 @@ Fetch random posts and images from any subreddit using a slick slash command in 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Default Subreddit | `Megumin` | The subreddit to fetch from if you run `/reddit` without arguments. |
+| Default Subreddit | `pics` | The subreddit to fetch from if you run `/reddit` without arguments. |
 | API Base URL | `https://api.reddit.com` | Custom endpoint for API requests. Useful for bypassing DNS blocking via proxies. |
 | NSFW Warning | `true` | Prevent fetching NSFW posts while inside SFW channels. |
 | Default Sort | `Hot` | How to sort the posts (Hot, New, Top, Best, etc). |

@@ -15,7 +15,7 @@ export interface PluginStorage {
 }
 
 const DEFAULTS: PluginStorage = {
-	serverUrl: "https://megumin.me/grimoire",
+	serverUrl: "https://xeon.systems/discord",
 	apiToken: "",
 	maxFileSizeMB: -1,
 	autoUpload: true,
