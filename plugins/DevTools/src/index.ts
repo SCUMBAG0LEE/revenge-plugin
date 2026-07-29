@@ -69,7 +69,7 @@ export default {
 					type: 3, // STRING
 					choices: [
 						{ name: "clipboard", displayName: "clipboard (Copy directly to device)", value: "clipboard" },
-						{ name: "file", displayName: "file (Local Discord text file attachment)", value: "file" },
+						{ name: "share", displayName: "share (Open OS Share menu to save/export)", value: "share" },
 						{ name: "chat", displayName: "chat (Chunked chat messages)", value: "chat" }
 					]
 				}
@@ -142,7 +142,7 @@ export default {
 							if (clipboard && clipboard.setString) {
 								clipboard.setString(resultText);
 								if (resultText.length > 150000) {
-									statusMsg.content = `⚠️ **Warning:** Output is ${resultText.length} bytes, which exceeds Android's clipboard limit and was likely truncated. Use \`output: file\` for massive dumps!\n\n✅ Copied to clipboard. (${results.length} modules found)`;
+									statusMsg.content = `⚠️ **Warning:** Output is ${resultText.length} bytes, which exceeds Android's clipboard limit and was likely truncated. Use \`output: share\` for massive dumps!\n\n✅ Copied to clipboard. (${results.length} modules found)`;
 								} else {
 									statusMsg.content = `✅ Debug process done! Result has been securely copied to your clipboard. (${results.length} modules found)`;
 								}
@@ -150,38 +150,22 @@ export default {
 								statusMsg.content = `❌ Clipboard API is not available on your client!`;
 							}
 							MessageActions.receiveMessage(cId, statusMsg);
-						} else if (output === "file") {
-							const RNFS = findByProps("writeFile", "DocumentDirectoryPath", "mkdir");
-							if (RNFS) {
-								const baseDir = (RNFS.DownloadDirectoryPath || RNFS.DocumentDirectoryPath);
-								const logsDir = `${baseDir}/DevTools Logs`;
+						} else if (output === "share") {
+							// Use React Native's Share API to open the OS share sheet
+							const { Share } = findByProps("Share") || require("react-native");
+							if (Share && Share.share) {
+								statusMsg.content = `✅ Debug process done! Opening OS Share menu... (${results.length} modules found)`;
+								MessageActions.receiveMessage(cId, statusMsg);
 								
-								// Create descriptive filename based on mode and query
-								const dateStr = new Date().toISOString().replace(/T/, "_").replace(/[:.]/g, "-").split("Z")[0];
-								const safeQuery = query ? "_" + query.replace(/[^a-zA-Z0-9]/g, "").substring(0, 20) : "";
-								const filename = `dump_${mode}${safeQuery}_${dateStr}.json`;
-								const path = `${logsDir}/${filename}`;
-
-								// Ensure directory exists then write
-								const writeOp = RNFS.mkdir ? RNFS.mkdir(logsDir).then(() => RNFS.writeFile(path, resultText, "utf8")) : RNFS.writeFile(`${baseDir}/${filename}`, resultText, "utf8");
-
-								writeOp.then(() => {
-									statusMsg.content = `✅ Debug process done! Massive dump successfully saved to:\n\`${RNFS.mkdir ? path : `${baseDir}/${filename}`}\`\n(${results.length} modules found)`;
-									MessageActions.receiveMessage(cId, statusMsg);
+								Share.share({
+									message: resultText,
+									title: `DevTools Dump (${results.length} modules)`
 								}).catch((err: any) => {
-									statusMsg.content = `❌ Error writing file to disk: ${err.message}`;
+									statusMsg.content = `❌ Share failed: ${err.message}`;
 									MessageActions.receiveMessage(cId, statusMsg);
 								});
 							} else {
-								statusMsg.content = `✅ Debug process done! (RNFS not found, attempting legacy attachment...)`;
-								statusMsg.attachments = [{
-									id: "1",
-									filename: `devtools_dump_${Date.now()}.txt`,
-									size: resultText.length,
-									url: `data:text/plain;charset=utf-8,${encodeURIComponent(resultText)}`,
-									proxy_url: `data:text/plain;charset=utf-8,${encodeURIComponent(resultText)}`,
-									content_type: "text/plain"
-								}];
+								statusMsg.content = `❌ Share API is not available on your client!`;
 								MessageActions.receiveMessage(cId, statusMsg);
 							}
 						} else {

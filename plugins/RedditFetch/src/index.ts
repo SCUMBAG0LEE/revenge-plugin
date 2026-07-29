@@ -169,9 +169,17 @@ export default {
 					} else {
 						const cId = ctx.channel?.id ?? ChannelStore?.getChannelId?.() ?? ChannelStore?.getLastSelectedChannelId?.();
 						
-						if (MessageSender && cId) {
-							// Use the exact same simple structure that VaultRelay uses to send messages
-							MessageSender.sendMessage(cId, { content: imgUrl });
+						// Try to find the actual user message sender. Usually it's in the same module as receiveMessage
+						const UserMessageSender = findByProps("sendMessage", "receiveMessage") || findByProps("sendMessage", "editMessage");
+						
+						if (UserMessageSender && cId) {
+							// Discord's sendMessage usually expects a specific object structure for user messages
+							UserMessageSender.sendMessage(cId, {
+								content: imgUrl,
+								invalidEmojis: [],
+								validNonShortcutEmojis: [],
+								tts: false
+							});
 						} else {
 							showToast("❌ Could not find MessageSender module or Channel ID!", getAssetIDByName("ic_warning_24px"));
 						}

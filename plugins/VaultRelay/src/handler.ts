@@ -30,21 +30,29 @@ export function patchUploadLimits(): (() => void) | undefined {
 			realMaxFileSize = realLimit;
 		}
 
-		// Overwrite the property directly on the exported object.
-		// Since it's a static property and not a function, we can't use `after()`.
-		Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", {
-			value: Number.MAX_SAFE_INTEGER,
-			writable: true,
-			configurable: true
-		});
-
-		// Return an unpatch function that restores the original value
-		return () => {
+		// Metro modules are often frozen, so defineProperty might fail. 
+		// We'll try basic assignment first, then defineProperty.
+		try {
+			UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = Number.MAX_SAFE_INTEGER;
+		} catch {
 			Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", {
-				value: realLimit,
+				value: Number.MAX_SAFE_INTEGER,
 				writable: true,
 				configurable: true
 			});
+		}
+
+		// Return an unpatch function that restores the original value
+		return () => {
+			try {
+				UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = realLimit;
+			} catch {
+				Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", {
+					value: realLimit,
+					writable: true,
+					configurable: true
+				});
+			}
 		};
 	} catch (err) {
 		console.error("[VaultRelay] Failed to patch UploadLimits:", err);
