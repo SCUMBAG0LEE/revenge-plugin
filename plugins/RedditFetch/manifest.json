@@ -1,6 +1,6 @@
 {
 	"name": "RedditFetch",
-	"description": "Fetch a random image from any subreddit, with Megumin as your trusty bot.",
+	"description": "Fetch random images and posts from any subreddit using a slash command.",
 	"authors": [{ "name": "SCUMBAG0LEE" }],
 	"main": "src/index.ts",
 	"vendetta": {

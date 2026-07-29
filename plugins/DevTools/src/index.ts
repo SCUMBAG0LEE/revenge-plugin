@@ -37,7 +37,7 @@ export default {
 						{ name: "ThemeStore", displayName: "ThemeStore", value: "ThemeStore" },
 						{ name: "ChannelStore", displayName: "ChannelStore", value: "ChannelStore" },
 						{ name: "sendMessage", displayName: "sendMessage", value: "sendMessage" },
-						{ name: "DCDFileManager", displayName: "DCDFileManager", value: "DCDFileManager" },
+						{ name: "NativeModules", displayName: "NativeModules", value: "NativeModules" },
 						{ name: "CloudUpload", displayName: "CloudUpload", value: "CloudUpload" }
 					]
 				},
@@ -133,33 +133,43 @@ export default {
 
 						if (output === "share") {
 							if (resultText.length > 500000) {
-								statusMsg.content = `⏳ Output is very large (${resultText.length} bytes). Uploading to paste.gg...`;
+								statusMsg.content = `⏳ Output is very large (${resultText.length} bytes). Uploading to pastebin...`;
 								MessageActions.receiveMessage(cId, statusMsg);
 
-								fetch("https://api.paste.gg/v1/pastes", {
-									method: "POST",
-									headers: { "Content-Type": "application/json" },
-									body: JSON.stringify({
-										name: "DevTools Dump",
-										files: [{ name: "dump.txt", content: { format: "text", value: resultText } }]
-									})
-								}).then(r => r.json()).then((json: any) => {
-									if (json.status === "success") {
-										const shareUrl = `https://paste.gg/p/anonymous/${json.result.id}`;
-										const { Share } = findByProps("Share") || require("react-native");
-										if (Share?.share) {
-											statusMsg.content = `✅ Debug process done! Opening OS Share menu with paste URL...`;
-											MessageActions.receiveMessage(cId, statusMsg);
-											Share.share({ message: shareUrl }).catch((err: any) => {
-												statusMsg.content = `❌ Share failed: ${err.message}\nURL: ${shareUrl}`;
-												MessageActions.receiveMessage(cId, statusMsg);
-											});
-										} else {
-											statusMsg.content = `✅ Uploaded to paste.gg: ${shareUrl}`;
-											MessageActions.receiveMessage(cId, statusMsg);
+								const tryUpload = async () => {
+									const endpoints = [
+										"https://haste.zneix.eu/documents",
+										"https://paste.nomsy.net/documents"
+									];
+									
+									for (const url of endpoints) {
+										try {
+											const r = await fetch(url, { method: "POST", body: resultText });
+											if (r.ok) {
+												const json = await r.json();
+												if (json.key) {
+													return url.replace("/documents", "") + "/" + json.key;
+												}
+											}
+										} catch (e) {
+											// Ignore and try next
 										}
+									}
+									throw new Error("All paste endpoints failed (Network Request Failed or Payload too large)");
+								};
+
+								tryUpload().then((shareUrl) => {
+									const { Share } = findByProps("Share") || require("react-native");
+									if (Share?.share) {
+										statusMsg.content = `✅ Debug process done! Opening OS Share menu with paste URL...`;
+										MessageActions.receiveMessage(cId, statusMsg);
+										Share.share({ message: shareUrl }).catch((err: any) => {
+											statusMsg.content = `❌ Share failed: ${err.message}\nURL: ${shareUrl}`;
+											MessageActions.receiveMessage(cId, statusMsg);
+										});
 									} else {
-										throw new Error(json.error || "Unknown paste.gg error");
+										statusMsg.content = `✅ Uploaded successfully: ${shareUrl}`;
+										MessageActions.receiveMessage(cId, statusMsg);
 									}
 								}).catch((err: any) => {
 									statusMsg.content = `❌ Upload failed: ${err.message}`;

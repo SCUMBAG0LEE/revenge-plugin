@@ -8,54 +8,52 @@ import type { PluginStorage } from "./settings";
  *
  * Returns the public URL of the uploaded file.
  */
-export function uploadToFileHost(
+export async function uploadToFileHost(
 	file: { uri: string; name: string; type: string },
 	storage: PluginStorage,
 	onProgress?: (percent: number) => void,
 ): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const formData = new FormData();
+	const formData = new FormData();
 
-		// React Native expects a plain object for file blobs in FormData
-		formData.append("file", {
-			uri: file.uri,
-			name: file.name,
-			type: file.type || "application/octet-stream",
-		} as any);
+	formData.append("file", {
+		uri: file.uri,
+		name: file.name,
+		type: file.type || "application/octet-stream",
+	} as any);
 
-		const xhr = new XMLHttpRequest();
+	let serverUrl = storage.serverUrl || "https://megumin.me/grimoire";
+	if (serverUrl.endsWith("/")) serverUrl = serverUrl.slice(0, -1);
+	
+	const targetUrl = `${serverUrl}/upload`;
 
-		xhr.upload.onprogress = (event) => {
-			if (event.lengthComputable && onProgress) {
-				onProgress(Math.round((event.loaded / event.total) * 100));
-			}
-		};
+	try {
+		// We use fetch since RN's XMLHttpRequest can sometimes instantly drop FormData uploads
+		// Note: React Native's fetch doesn't support upload progress callbacks easily, 
+		// so we just simulate a starting progress event.
+		if (onProgress) onProgress(25);
+		
+		const response = await fetch(targetUrl, {
+			method: "POST",
+			headers: {
+				"Authorization": `Bearer ${storage.apiToken}`,
+			},
+			body: formData,
+		});
 
-		xhr.onload = () => {
-			if (xhr.status >= 200 && xhr.status < 300) {
-				try {
-					const data = JSON.parse(xhr.responseText);
-					if (data.url) {
-						resolve(data.url);
-					} else {
-						reject(new Error("Server did not return a file URL"));
-					}
-				} catch {
-					reject(new Error(`Invalid JSON response: ${xhr.responseText}`));
-				}
-			} else {
-				reject(
-					new Error(`Upload failed with status ${xhr.status}: ${xhr.responseText}`),
-				);
-			}
-		};
+		const text = await response.text();
 
-		xhr.onerror = () => reject(new Error("Network error during upload"));
-		xhr.ontimeout = () => reject(new Error("Upload timed out"));
+		if (!response.ok) {
+			throw new Error(`Status ${response.status}: ${text}`);
+		}
 
-		const serverUrl = storage.serverUrl || "https://megumin.me/grimoire";
-		xhr.open("POST", `${serverUrl}/upload`);
-		xhr.setRequestHeader("Authorization", `Bearer ${storage.apiToken}`);
-		xhr.send(formData);
-	});
+		try {
+			const data = JSON.parse(text);
+			if (data.url) return data.url;
+			throw new Error("Server did not return a file URL");
+		} catch (parseError) {
+			throw new Error(`Invalid JSON response: ${text}`);
+		}
+	} catch (err: any) {
+		throw new Error(err.message || "Network error during upload");
+	}
 }

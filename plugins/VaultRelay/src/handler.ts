@@ -18,19 +18,29 @@ const MB = 1024 * 1024;
 export let realMaxFileSize = 10 * MB; // fallback to 10MB
 
 function cleanup(channelId: string) {
-	try {
-		const pending = PendingMessages?.getPendingMessages?.(channelId);
-		if (!pending) return;
-
-		for (const [messageId, message] of Object.entries(pending)) {
-			if ((message as any).state === "FAILED") {
-				PendingMessages.deletePendingMessage(channelId, messageId);
-				console.log(`[VaultRelay] Deleted failed message: ${messageId}`);
-			}
+	let attempts = 0;
+	const interval = setInterval(() => {
+		attempts++;
+		if (attempts > 10) {
+			clearInterval(interval);
+			return; // Give up after 5 seconds
 		}
-	} catch (err) {
-		console.warn("[VaultRelay] Failed to delete pending messages:", err);
-	}
+		try {
+			const pending = PendingMessages?.getPendingMessages?.(channelId);
+			if (!pending) return;
+
+			for (const [messageId, message] of Object.entries(pending)) {
+				if ((message as any).state === "FAILED") {
+					PendingMessages.deletePendingMessage(channelId, messageId);
+					console.log(`[VaultRelay] Deleted failed message: ${messageId}`);
+					clearInterval(interval);
+				}
+			}
+		} catch (err) {
+			console.warn("[VaultRelay] Failed to delete pending messages:", err);
+			clearInterval(interval);
+		}
+	}, 500);
 }
 
 export function patchUploadLimits(): (() => void) | undefined {

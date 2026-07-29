@@ -213,7 +213,13 @@ export default {
 					if (silent) {
 						sendBotMessage(ctx.channel.id, fallbackWarning, [embed]);
 					} else {
-						return { content: fallbackWarning + (isImage ? imgUrl : `https://reddit.com${finalPost.permalink}`) };
+						if (MessageSender && MessageSender.sendMessage) {
+							MessageSender.sendMessage(ctx.channel.id, { 
+								content: fallbackWarning + (isImage ? imgUrl : `https://reddit.com${finalPost.permalink}`) 
+							});
+						} else {
+							showToast("MessageSender not found!", getAssetIDByName("ic_warning_24px"));
+						}
 					}
 				} catch (err: any) {
 					logger.log(err);
