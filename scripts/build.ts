@@ -470,7 +470,7 @@ const htmlContent = `<!DOCTYPE html>
         }
     </script>
 </body>
-</html>\`;
+</html>`;
 
 await Bun.write("./dist/index.html", htmlContent);
 console.log(`✨ Generated landing page -> dist/index.html`);
