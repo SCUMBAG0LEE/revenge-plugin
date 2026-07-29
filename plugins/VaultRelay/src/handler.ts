@@ -74,17 +74,15 @@ const sendMessageAggressive = async (channelId: string, content: string) => {
 
 export function patchUploadLimits(): (() => void) | undefined {
 	const UploadLimits = findByProps("DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE");
-	const MaxSizeModule = findByProps("getMaxFileSize");
+	const FileUtils = findByProps("maxFileSize", "makeFile");
+	const PremiumUtils = findByProps("getUserMaxFileSize");
 	
 	const unpatches: (() => void)[] = [];
 
 	if (UploadLimits) {
 		try {
 			const realLimit = UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE;
-			if (typeof realLimit === "number") {
-				realMaxFileSize = realLimit;
-			}
-
+			if (typeof realLimit === "number") realMaxFileSize = realLimit;
 			try { UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = Number.MAX_SAFE_INTEGER; } 
 			catch { Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", { value: Number.MAX_SAFE_INTEGER, writable: true, configurable: true }); }
 
@@ -92,18 +90,28 @@ export function patchUploadLimits(): (() => void) | undefined {
 				try { UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = realLimit; } 
 				catch { Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", { value: realLimit, writable: true, configurable: true }); }
 			});
-		} catch (err) {
-			console.error("[VaultRelay] Failed to patch UploadLimits constant:", err);
-		}
+		} catch (err) { }
 	}
 
-	if (MaxSizeModule && typeof MaxSizeModule.getMaxFileSize === "function") {
+	if (PremiumUtils && typeof PremiumUtils.getUserMaxFileSize === "function") {
 		try {
-			// Hook getMaxFileSize to always return a massive number
-			const unpatchGetMax = after("getMaxFileSize", MaxSizeModule, () => {
-				return Number.MAX_SAFE_INTEGER;
-			});
-			unpatches.push(unpatchGetMax);
+			unpatches.push(after("getUserMaxFileSize", PremiumUtils, () => Number.MAX_SAFE_INTEGER));
+		} catch (e) {}
+	}
+
+	if (FileUtils) {
+		try {
+			if (typeof FileUtils.maxFileSize === "function") {
+				unpatches.push(after("maxFileSize", FileUtils, () => Number.MAX_SAFE_INTEGER));
+			} else if (typeof FileUtils.maxFileSize === "number") {
+				const real = FileUtils.maxFileSize;
+				try { FileUtils.maxFileSize = Number.MAX_SAFE_INTEGER; } 
+				catch { Object.defineProperty(FileUtils, "maxFileSize", { value: Number.MAX_SAFE_INTEGER, writable: true, configurable: true }); }
+				unpatches.push(() => {
+					try { FileUtils.maxFileSize = real; } 
+					catch { Object.defineProperty(FileUtils, "maxFileSize", { value: real, writable: true, configurable: true }); }
+				});
+			}
 		} catch (e) {}
 	}
 	

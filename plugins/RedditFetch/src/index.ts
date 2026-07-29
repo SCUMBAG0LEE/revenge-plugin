@@ -260,13 +260,9 @@ export default {
 						color: 0xff4500, // Reddit Orange
 					};
 
-					let desc = finalPost.selftext || finalPost.url;
+					let desc = finalPost.selftext;
 					if (desc && desc.length > 2000) desc = desc.substring(0, 1997) + "...";
 					if (desc) embed.description = desc;
-
-					if (isImage) {
-						embed.image = { url: imgUrl };
-					}
 
 					if (silent) {
 						sendBotMessage(ctx.channel.id, "", [embed]);
