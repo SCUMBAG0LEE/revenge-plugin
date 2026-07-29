@@ -167,6 +167,8 @@ function cleanup(channelId: string) {
 }
 
 
+import { showConfirmationAlert } from "@vendetta/ui/alerts";
+
 export function patchUploader(): (() => void) | undefined {
 	if (!CloudUpload) {
 		console.warn("[VaultRelay] CloudUpload module not found — upload patching skipped");
@@ -309,7 +311,6 @@ export function patchUploader(): (() => void) | undefined {
 				
 				// Fallback to Vendetta's custom dialog if native Alert is missing or crashes
 				try {
-					const { showConfirmationAlert } = require("@vendetta/ui/alerts");
 					showConfirmationAlert({
 						title: "Upload to VaultRelay?",
 						content: `${reason} Do you want to intercept and upload it to your VaultRelay server instead?\n\n(WARNING: Do not tap outside this box or it will freeze!)`,
