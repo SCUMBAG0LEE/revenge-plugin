@@ -1,31 +1,25 @@
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findAll } from "@vendetta/metro";
 import { clipboard } from "@vendetta/metro/common";
-import { logger } from "@vendetta";
 
 const MessageActions = findByProps("receiveMessage", "sendClydeError") ?? findByProps("receiveMessage");
 const ChannelStore = findByProps("getLastSelectedChannelId");
 const BotMessageCreator = findByProps("createBotMessage");
 const BotAvatars = findByProps("BOT_AVATARS");
 
-function sendLocalMessage(channelId: string, content: string) {
-	const cId = channelId ?? ChannelStore?.getChannelId?.() ?? ChannelStore?.getLastSelectedChannelId?.();
-	if (!BotMessageCreator || !MessageActions || !cId) return;
+function getChannelId(ctxChannelId: string) {
+	return ctxChannelId ?? ChannelStore?.getChannelId?.() ?? ChannelStore?.getLastSelectedChannelId?.();
+}
 
-	// Automatically split giant outputs into multiple Discord messages
-	const chunks = content.match(/[\s\S]{1,1900}/g) || [];
-	
-	for (const chunk of chunks) {
-		const msg = BotMessageCreator.createBotMessage({ channelId: cId, content: chunk });
-		
-		msg.author.username = "DevTools";
-		msg.author.avatar = "DevTools";
-		if (BotAvatars && BotAvatars.BOT_AVATARS) {
-			BotAvatars.BOT_AVATARS.DevTools = "https://cdn.discordapp.com/embed/avatars/0.png";
-		}
-
-		MessageActions.receiveMessage(cId, msg);
+function createLocalMessage(cId: string, content: string) {
+	if (!BotMessageCreator || !MessageActions || !cId) return null;
+	const msg = BotMessageCreator.createBotMessage({ channelId: cId, content });
+	msg.author.username = "DevTools";
+	msg.author.avatar = "DevTools";
+	if (BotAvatars && BotAvatars.BOT_AVATARS) {
+		BotAvatars.BOT_AVATARS.DevTools = "https://cdn.discordapp.com/embed/avatars/0.png";
 	}
+	return msg;
 }
 
 const unpatches: (() => void)[] = [];
@@ -67,15 +61,16 @@ export default {
 					]
 				},
 				{
-					name: "to_clipboard",
-					displayName: "to_clipboard",
-					description: "Copy results to clipboard instead of spamming chat?",
-					displayDescription: "Copy results to clipboard?",
+					name: "output",
+					displayName: "output",
+					description: "Where to send the output",
+					displayDescription: "Where to send the output",
 					required: false,
-					type: 5, // BOOLEAN (Mobile Discord usually handles this fine as a toggle, or we can use type 3. Let's use type 3 to be safe based on past complaints)
+					type: 3, // STRING
 					choices: [
-						{ name: "true", displayName: "true", value: "true" },
-						{ name: "false", displayName: "false", value: "false" }
+						{ name: "clipboard", displayName: "clipboard (Copy directly to device)", value: "clipboard" },
+						{ name: "file", displayName: "file (Local Discord text file attachment)", value: "file" },
+						{ name: "chat", displayName: "chat (Chunked chat messages)", value: "chat" }
 					]
 				}
 			],
@@ -85,62 +80,99 @@ export default {
 			execute: (args: any, ctx: any) => {
 				const query = args.find((a: any) => a.name === "query")?.value;
 				const mode = args.find((a: any) => a.name === "mode")?.value || "fuzzy";
-				const toClipboard = args.find((a: any) => a.name === "to_clipboard")?.value === "true";
+				const output = args.find((a: any) => a.name === "output")?.value || "clipboard";
+				const cId = getChannelId(ctx.channel?.id);
 				
+				if (!cId) return;
+
 				if (mode !== "dump_all" && !query) {
-					sendLocalMessage(ctx.channel?.id, `❌ You must provide a \`query\` unless you are using \`mode: dump_all\`.`);
+					const err = createLocalMessage(cId, `❌ You must provide a \`query\` unless you are using \`mode: dump_all\`.`);
+					if (err) MessageActions.receiveMessage(cId, err);
 					return;
 				}
-				
-				try {
-					let results: any[] = [];
-					
-					if (mode === "dump_all") {
-						results = findAll((m: any) => m && Object.keys(m).length > 0);
-					} else if (mode === "exact") {
-						const props = query.split(",").map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-						const found = findByProps(...props);
-						if (found) results = [found];
-					} else {
-						// fuzzy
-						const q = query.toLowerCase();
-						results = findAll((m: any) => m && Object.keys(m).some(k => k.toLowerCase().includes(q)));
-					}
-					
-					if (!results || results.length === 0) {
-						sendLocalMessage(ctx.channel?.id, `❌ No modules found matching your query.`);
-						return;
-					}
 
-					let resultText = `✅ Found ${results.length} modules (Mode: ${mode}${query ? `, Query: ${query}` : ''}):\n\n`;
-					
-					for (let i = 0; i < results.length; i++) {
-						const mod = results[i];
-						const keys = Object.keys(mod);
-						resultText += `**Match ${i + 1}** (Total keys: ${keys.length})\n`;
-						
-						if (mode === "fuzzy") {
-							const q = query.toLowerCase();
-							const matchingKeys = keys.filter(k => k.toLowerCase().includes(q));
-							resultText += `Matching Keys: \`${matchingKeys.join(", ")}\`\n`;
-						}
-						
-						resultText += `All Keys: \`${keys.join(", ")}\`\n\n`;
-					}
+				// Create dynamic status message
+				const statusMsg = createLocalMessage(cId, `⏳ Starting debug process, this may take a moment...`);
+				if (!statusMsg) return;
+				MessageActions.receiveMessage(cId, statusMsg);
 
-					if (toClipboard) {
-						if (clipboard && clipboard.setString) {
-							clipboard.setString(resultText);
-							sendLocalMessage(ctx.channel?.id, `✅ Copied **${results.length}** modules to your clipboard securely!`);
+				// Defer heavy work so UI can render the status message
+				setTimeout(() => {
+					try {
+						let results: any[] = [];
+						
+						if (mode === "dump_all") {
+							results = findAll((m: any) => m && Object.keys(m).length > 0);
+						} else if (mode === "exact") {
+							const props = query.split(",").map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+							const found = findByProps(...props);
+							if (found) results = [found];
 						} else {
-							sendLocalMessage(ctx.channel?.id, `❌ Clipboard API is not available on your client!`);
+							// fuzzy
+							const q = query.toLowerCase();
+							results = findAll((m: any) => m && Object.keys(m).some(k => k.toLowerCase().includes(q)));
 						}
-					} else {
-						sendLocalMessage(ctx.channel?.id, resultText);
+						
+						if (!results || results.length === 0) {
+							statusMsg.content = `❌ No modules found matching your query.`;
+							MessageActions.receiveMessage(cId, statusMsg);
+							return;
+						}
+
+						let resultText = "";
+						if (mode === "dump_all") {
+							// Ultra compact to prevent clipboard truncation
+							resultText = JSON.stringify(results.map(m => Object.keys(m)));
+						} else {
+							resultText = `✅ Found ${results.length} modules (Mode: ${mode}${query ? `, Query: ${query}` : ''}):\n\n`;
+							for (let i = 0; i < results.length; i++) {
+								const mod = results[i];
+								const keys = Object.keys(mod);
+								resultText += `**Match ${i + 1}** (Total keys: ${keys.length})\n`;
+								if (mode === "fuzzy") {
+									const q = query.toLowerCase();
+									const matchingKeys = keys.filter(k => k.toLowerCase().includes(q));
+									resultText += `Matching Keys: \`${matchingKeys.join(", ")}\`\n`;
+								}
+								resultText += `All Keys: \`${keys.join(", ")}\`\n\n`;
+							}
+						}
+
+						if (output === "clipboard") {
+							if (clipboard && clipboard.setString) {
+								clipboard.setString(resultText);
+								statusMsg.content = `✅ Debug process done! Result has been securely copied to your clipboard. (${results.length} modules found)`;
+							} else {
+								statusMsg.content = `❌ Clipboard API is not available on your client!`;
+							}
+							MessageActions.receiveMessage(cId, statusMsg);
+						} else if (output === "file") {
+							statusMsg.content = `✅ Debug process done! (${results.length} modules found)`;
+							statusMsg.attachments = [{
+								id: "1",
+								filename: `devtools_dump_${Date.now()}.txt`,
+								size: resultText.length,
+								url: `data:text/plain;charset=utf-8,${encodeURIComponent(resultText)}`,
+								proxy_url: `data:text/plain;charset=utf-8,${encodeURIComponent(resultText)}`,
+								content_type: "text/plain"
+							}];
+							MessageActions.receiveMessage(cId, statusMsg);
+						} else {
+							// Chat chunking
+							statusMsg.content = `✅ Debug process done! Dumping to chat... (${results.length} modules found)`;
+							MessageActions.receiveMessage(cId, statusMsg);
+							
+							const chunks = resultText.match(/[\s\S]{1,1900}/g) || [];
+							for (const chunk of chunks) {
+								const chunkMsg = createLocalMessage(cId, chunk);
+								if (chunkMsg) MessageActions.receiveMessage(cId, chunkMsg);
+							}
+						}
+					} catch (e: any) {
+						statusMsg.content = `❌ Error searching props:\n\`\`\`js\n${e.message}\n\`\`\``;
+						MessageActions.receiveMessage(cId, statusMsg);
 					}
-				} catch (e: any) {
-					sendLocalMessage(ctx.channel?.id, `❌ Error searching props:\n\`\`\`js\n${e.message}\n\`\`\``);
-				}
+				}, 100);
 			}
 		});
 
