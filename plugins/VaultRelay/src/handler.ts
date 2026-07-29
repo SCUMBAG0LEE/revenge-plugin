@@ -17,31 +17,44 @@ const PendingMessages = findByProps("getPendingMessages", "deletePendingMessage"
 const MB = 1024 * 1024;
 export let realMaxFileSize = 10 * MB; // fallback to 10MB
 
-function cleanup(channelId: string) {
-	let attempts = 0;
-	const interval = setInterval(() => {
-		attempts++;
-		if (attempts > 10) {
-			clearInterval(interval);
-			return; // Give up after 5 seconds
-		}
-		try {
-			const pending = PendingMessages?.getPendingMessages?.(channelId);
-			if (!pending) return;
+const getMessageActions = () => {
+	const g = (globalThis as any);
+	if (g?.MessageActions && typeof g.MessageActions === "object") return g.MessageActions;
+	const bySendOnly = findByProps("sendMessage");
+	if (bySendOnly) return bySendOnly;
+	const bySendReceive = findByProps("sendMessage", "receiveMessage");
+	if (bySendReceive) return bySendReceive;
+	const byCreate = findByProps("createMessage", "getMessages");
+	if (byCreate) return byCreate;
+	return null;
+};
 
-			for (const [messageId, message] of Object.entries(pending)) {
-				if ((message as any).state === "FAILED") {
-					PendingMessages.deletePendingMessage(channelId, messageId);
-					console.log(`[VaultRelay] Deleted failed message: ${messageId}`);
-					clearInterval(interval);
-				}
-			}
-		} catch (err) {
-			console.warn("[VaultRelay] Failed to delete pending messages:", err);
-			clearInterval(interval);
-		}
-	}, 500);
-}
+const sendMessageAggressive = async (channelId: string, content: string) => {
+	const MA = getMessageActions();
+	if (!MA) return { ok: false };
+	const msgObj = { content };
+	const nonce = Date.now().toString();
+	const attempts = [
+		() => MA?.sendMessage?.(channelId, msgObj),
+		() => MA?.sendMessage?.(channelId, msgObj, true),
+		() => MA?.sendMessage?.(channelId, msgObj, undefined, { nonce }),
+		() => MA?.createMessage?.(channelId, msgObj),
+		() => MA?.createMessage?.(channelId, content),
+		() => MA?.createMessage?.(channelId, msgObj, undefined, { nonce }),
+		() => MA?.sendMessage?.(channelId, content),
+		() => MA?.sendMessage?.(channelId, content, true),
+		() => MA.default?.createMessage?.(channelId, msgObj),
+		() => MA?.dispatch?.({ type: "CREATE_MESSAGE", channelId, message: msgObj })
+	];
+	for (const fn of attempts) {
+		try {
+			const res = fn();
+			if (res && typeof (res as any).then === "function") await res;
+			return { ok: true };
+		} catch (e) {}
+	}
+	return { ok: false };
+};
 
 export function patchUploadLimits(): (() => void) | undefined {
 	const UploadLimits = findByProps("DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE");
@@ -51,14 +64,11 @@ export function patchUploadLimits(): (() => void) | undefined {
 	}
 	
 	try {
-		// Store the real value before we overwrite it
 		const realLimit = UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE;
 		if (typeof realLimit === "number") {
 			realMaxFileSize = realLimit;
 		}
 
-		// Metro modules are often frozen, so defineProperty might fail. 
-		// We'll try basic assignment first, then defineProperty.
 		try {
 			UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = Number.MAX_SAFE_INTEGER;
 		} catch {
@@ -69,7 +79,6 @@ export function patchUploadLimits(): (() => void) | undefined {
 			});
 		}
 
-		// Return an unpatch function that restores the original value
 		return () => {
 			try {
 				UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = realLimit;
@@ -87,13 +96,6 @@ export function patchUploadLimits(): (() => void) | undefined {
 	}
 }
 
-/**
- * Patches the CloudUpload constructor to intercept file uploads that
- * exceed the configured size threshold.
- *
- * When a file is too large for Discord, it is uploaded to the VaultRelay
- * server and the resulting public URL is prepended to the message body.
- */
 export function patchUploader(): (() => void) | undefined {
 	if (!CloudUpload) {
 		console.warn("[VaultRelay] CloudUpload module not found — upload patching skipped");
@@ -103,99 +105,80 @@ export function patchUploader(): (() => void) | undefined {
 	const originalUpload = CloudUpload.prototype.reactNativeCompressAndExtractData;
 	if (!originalUpload) return undefined;
 
+	let showConfirmationAlert: any;
+	try {
+		showConfirmationAlert = findByProps("showConfirmationAlert")?.showConfirmationAlert;
+	} catch (e) {}
+
 	CloudUpload.prototype.reactNativeCompressAndExtractData = async function (...args: any[]) {
 		const file = this;
-		// If size is missing or 0, assume it's large so we don't accidentally skip it
 		let size = file?.preCompressionSize ?? file?.size ?? file?.currentSize;
 		if (typeof size !== "number" || size === 0) size = Number.MAX_SAFE_INTEGER;
 		
 		const cfg = storage as unknown as PluginStorage;
+		const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
 		const manualSetting = cfg.maxFileSizeMB ?? -1;
 		const maxBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
-
-		showToast(`Debug VR: preComp=${this?.preCompressionSize}, size=${this?.size}, max=${maxBytes}`, getAssetIDByName("ic_info"));
 
 		if (size <= maxBytes) return originalUpload.apply(this, args);
 
 		if (!cfg.apiToken) {
-			showToast("⚠️ VaultRelay: Missing API Token in settings! Uploading to Discord normally...", getAssetIDByName("ic_warning_24px"));
+			showToast("⚠️ VaultRelay: Missing API Token!", getAssetIDByName("ic_warning_24px"));
 			return originalUpload.apply(this, args);
 		}
 
-		// Bypass Discord's file size limit check by spoofing the size
-		this.preCompressionSize = 1337;
-
-		showToast(
-			`📤 Uploading ${file.filename ?? file.name ?? "file"} to VaultRelay...`,
-			getAssetIDByName("ic_upload"),
-		);
-
-		try {
-			const url = await uploadToFileHost(
-				file as any,
-				cfg,
-				(pct) => {
-					if (pct % 25 === 0) {
-						showToast(
-							`📤 Uploading... ${pct}%`,
-							getAssetIDByName("ic_upload"),
-						);
+		const doVaultUpload = () => {
+			this.preCompressionSize = 1337;
+			this.size = 1337;
+			(async () => {
+				try {
+					const url = await uploadToFileHost(file as any, cfg, (pct) => {
+						if (pct % 25 === 0) showToast(`📤 Uploading... ${pct}%`, getAssetIDByName("ic_upload"));
+					});
+					if (typeof this.setStatus === "function") this.setStatus("CANCELED");
+					if (channelId) {
+						setTimeout(() => {
+							try {
+								const MessageActions = findByProps("deleteMessage");
+								const MessageStore = findByProps("getMessages");
+								const msgs = MessageStore?.getMessages(channelId);
+								const arr = msgs?._array || msgs?.toArray?.() || Object.values(msgs || {});
+								const pending = arr.filter((m: any) => m && m.state === "SEND_FAILED");
+								for (const msg of pending) MessageActions?.deleteMessage(channelId, msg.id);
+							} catch (err) {}
+						}, 1000);
 					}
-				},
-			);
-
-			const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
-			if (typeof this.setStatus === "function") this.setStatus("CANCELED");
-			if (channelId) {
-				setTimeout(() => {
-					try {
-						const MessageActions = findByProps("deleteMessage");
-						const MessageStore = findByProps("getMessages");
-						const msgs = MessageStore?.getMessages(channelId);
-						const arr = msgs?._array || msgs?.toArray?.() || Object.values(msgs || {});
-						const pending = arr.filter((m: any) => m && m.state === "SEND_FAILED");
-						
-						for (const msg of pending) {
-							MessageActions?.deleteMessage(channelId, msg.id);
+					showToast(`✅ Uploaded to VaultRelay!`, getAssetIDByName("Check"));
+					if (channelId) {
+						if (cfg.autoSend) {
+							sendMessageAggressive(channelId, url);
+						} else {
+							try {
+								const { ComponentDispatch } = findByProps("ComponentDispatch") || {};
+								if (ComponentDispatch && ComponentDispatch.dispatchToLastSubscribed) {
+									ComponentDispatch.dispatchToLastSubscribed("INSERT_TEXT", { plainText: `\n${url} ` });
+								}
+							} catch (e) {}
 						}
-					} catch (err) {
-						// Ignore cleanup errors
 					}
-				}, 1000);
-			}
-
-			showToast(
-				`✅ Uploaded to VaultRelay!`,
-				getAssetIDByName("Check"),
-			);
-
-			if (channelId) {
-				if (cfg.autoSend) {
-					// Auto Send Enabled: Automatically send the message via REST
-					sendMessageAggressive(channelId, url);
-				} else {
-					// Auto Send Disabled: Inject directly into the chat input box!
-					try {
-						const { ComponentDispatch } = findByProps("ComponentDispatch") || {};
-						if (ComponentDispatch && ComponentDispatch.dispatchToLastSubscribed) {
-							ComponentDispatch.dispatchToLastSubscribed("INSERT_TEXT", { plainText: `\n${url} ` });
-						}
-					} catch (e) {
-						// Ignore dispatch errors
-					}
+				} catch (err: any) {
+					showToast(`❌ Upload Failed: ${err.message}`, getAssetIDByName("ic_warning_24px"));
 				}
-			}
-		} catch (err: any) {
-			showToast(
-				`❌ Upload failed: ${err.message}`,
-				getAssetIDByName("Small"),
-			);
-			console.error("[VaultRelay] Upload error:", err);
-			const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
-			if (typeof this.setStatus === "function") this.setStatus("CANCELED");
-			if (channelId) setTimeout(() => cleanup(channelId), 500);
+			})();
+		};
+
+		if (!cfg.autoUpload && showConfirmationAlert) {
+			showConfirmationAlert({
+				title: "Upload to VaultRelay?",
+				content: `This file is oversized (${(size / MB).toFixed(1)}MB). Do you want to intercept and upload it to your VaultRelay server instead?`,
+				confirmText: "Upload",
+				cancelText: "Cancel",
+				onConfirm: () => doVaultUpload()
+			});
+			return null; // Return null so original upload is cancelled
 		}
 
+		doVaultUpload();
 		return null;
 	};
 
@@ -204,16 +187,8 @@ export function patchUploader(): (() => void) | undefined {
 	};
 }
 
-/**
- * Patches the sendMessage function to intercept messages with oversized
- * attachments, upload them to VaultRelay, and replace the attachment with
- * the returned URL in the message content.
- */
 export function patchMessageSender(): (() => void) | undefined {
-	if (!MessageSender) {
-		console.warn("[VaultRelay] MessageSender module not found — message patching skipped");
-		return undefined;
-	}
+	if (!MessageSender) return undefined;
 
 	try {
 		return before("sendMessage", MessageSender, (args: any[]) => {
@@ -224,48 +199,27 @@ export function patchMessageSender(): (() => void) | undefined {
 
 			if (!cfg.apiToken || !message?.attachments?.length) return;
 
-			const oversized = message.attachments.filter(
-				(a: any) => a.size && a.size > maxBytes,
-			);
-
+			const oversized = message.attachments.filter((a: any) => a.size && a.size > maxBytes);
 			if (oversized.length === 0) return;
 
-			// Keep only attachments under the limit
-			message.attachments = message.attachments.filter(
-				(a: any) => !a.size || a.size <= maxBytes,
-			);
-
+			message.attachments = message.attachments.filter((a: any) => !a.size || a.size <= maxBytes);
 			const channelId = args[0];
 
 			for (const file of oversized) {
-				showToast(
-					`📤 Uploading ${file.filename ?? "file"} to VaultRelay...`,
-					getAssetIDByName("ic_upload"),
-				);
-
-				uploadToFileHost(
-					{
-						uri: file.uri ?? file.url,
-						name: file.filename ?? "file",
-						type: file.content_type ?? "application/octet-stream",
-					},
-					cfg,
-				)
+				showToast(`📤 Uploading ${file.filename ?? "file"} to VaultRelay...`, getAssetIDByName("ic_upload"));
+				uploadToFileHost({ uri: file.uri ?? file.url, name: file.filename ?? "file", type: file.content_type ?? "application/octet-stream" }, cfg)
 					.then((url) => {
-						showToast(
-							`✅ Uploaded to VaultRelay!`,
-							getAssetIDByName("Check"),
-						);
-						if (MessageSender) {
-							MessageSender.sendMessage(channelId, { content: url });
+						showToast(`✅ Uploaded to VaultRelay!`, getAssetIDByName("Check"));
+						if (cfg.autoSend) sendMessageAggressive(channelId, url);
+						else {
+							try {
+								const { ComponentDispatch } = findByProps("ComponentDispatch") || {};
+								if (ComponentDispatch && ComponentDispatch.dispatchToLastSubscribed) ComponentDispatch.dispatchToLastSubscribed("INSERT_TEXT", { plainText: `\n${url} ` });
+							} catch (e) {}
 						}
 					})
 					.catch((err: Error) => {
-						showToast(
-							`❌ Upload failed: ${err.message}`,
-							getAssetIDByName("Small"),
-						);
-						console.error("[VaultRelay] Upload error:", err);
+						showToast(`❌ Upload failed: ${err.message}`, getAssetIDByName("Small"));
 					});
 			}
 		});
