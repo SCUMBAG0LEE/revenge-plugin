@@ -53,6 +53,21 @@ const sendMessageAggressive = async (channelId: string, content: string) => {
 			return { ok: true };
 		} catch (e) {}
 	}
+	
+	// REST API Fallback
+	try {
+		const TokenStore = findByProps("getToken");
+		const token = TokenStore?.getToken?.();
+		if (token) {
+			const restRes = await fetch(`https://discord.com/api/v9/channels/${channelId}/messages`, {
+				method: "POST",
+				headers: { "Authorization": token, "Content-Type": "application/json" },
+				body: JSON.stringify({ content, nonce: Math.floor(Math.random() * 1000000000000000).toString() })
+			});
+			if (restRes.ok) return { ok: true };
+		}
+	} catch (e) {}
+	
 	return { ok: false };
 };
 
@@ -178,18 +193,30 @@ export function patchUploader(): (() => void) | undefined {
 						if (pct % 25 === 0) showToast(`📤 Uploading... ${pct}%`, getAssetIDByName("ic_upload"));
 					});
 					if (typeof this.setStatus === "function") this.setStatus("CANCELED");
+					if (typeof this.cancel === "function") this.cancel();
 					if (channelId) cleanup(channelId);
 					showToast(`✅ Uploaded to VaultRelay!`, getAssetIDByName("Check"));
 					if (channelId) {
 						if (cfg.autoSend) {
 							sendMessageAggressive(channelId, url);
 						} else {
+							// Try ComponentDispatch, if it fails, copy to clipboard
+							let injected = false;
 							try {
 								const { ComponentDispatch } = findByProps("ComponentDispatch") || {};
 								if (ComponentDispatch && ComponentDispatch.dispatchToLastSubscribed) {
 									ComponentDispatch.dispatchToLastSubscribed("INSERT_TEXT", { plainText: `\n${url} ` });
+									injected = true;
 								}
 							} catch (e) {}
+							
+							if (!injected) {
+								const { clipboard } = require("@vendetta/metro/common");
+								if (clipboard && clipboard.setString) {
+									clipboard.setString(url);
+									showToast("📋 Link copied to clipboard!", getAssetIDByName("ic_message_copy"));
+								}
+							}
 						}
 					}
 				} catch (err: any) {
@@ -200,24 +227,33 @@ export function patchUploader(): (() => void) | undefined {
 		};
 
 		if (!cfg.autoUpload && showConfirmationAlert) {
-			// If it only exceeded Discord's limit (meaning the user set a custom limit higher than Discord allows)
-			// we explain this in the prompt to avoid confusion.
 			const reason = exceedsDiscordLimit && !exceedsUserLimit
 				? `This file (${(size / MB).toFixed(1)}MB) exceeds Discord's hard limit of ${(realMaxFileSize / MB).toFixed(1)}MB.`
 				: `This file (${(size / MB).toFixed(1)}MB) exceeds your VaultRelay size limit.`;
 				
-			showConfirmationAlert({
-				title: "Upload to VaultRelay?",
-				content: `${reason} Do you want to intercept and upload it to your VaultRelay server instead?`,
-				confirmText: "Upload",
-				cancelText: "Cancel",
-				onConfirm: () => doVaultUpload()
+			return new Promise((resolve) => {
+				showConfirmationAlert({
+					title: "Upload to VaultRelay?",
+					content: `${reason} Do you want to intercept and upload it to your VaultRelay server instead?`,
+					confirmText: "Upload",
+					cancelText: "Cancel",
+					onConfirm: () => {
+						doVaultUpload();
+						if (typeof this.setStatus === "function") this.setStatus("CANCELED");
+						if (typeof this.cancel === "function") this.cancel();
+						resolve(undefined);
+					},
+					onCancel: () => {
+						resolve(originalUpload.apply(this, args));
+					}
+				});
 			});
-			return new Promise(() => {}); // Wait forever to prevent Discord error modal
 		}
 
 		doVaultUpload();
-		return new Promise(() => {}); // Wait forever to prevent Discord error modal
+		if (typeof this.setStatus === "function") this.setStatus("CANCELED");
+		if (typeof this.cancel === "function") this.cancel();
+		return Promise.resolve(); // Resolve cleanly so queue isn't blocked
 	};
 
 	return () => {
