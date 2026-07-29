@@ -23,7 +23,7 @@ function sendBotMessage(channelId: string, content: string, embeds: any[] = []) 
 	msg.author.username = "Megumin";
 	msg.author.avatar = "Megumin";
 	if (BotAvatars && BotAvatars.BOT_AVATARS) {
-		BotAvatars.BOT_AVATARS.Megumin = "https://upload.wikimedia.org/wikipedia/en/b/b3/Megumin_light_novel.png";
+		BotAvatars.BOT_AVATARS.Megumin = "https://static.wikia.nocookie.net/konosuba/images/9/96/Konosuba_-_Megumin_Cute_2.jpg";
 	}
 
 	if (typeof content === "string") {
