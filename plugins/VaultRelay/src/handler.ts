@@ -278,8 +278,6 @@ export function patchUploader(): (() => void) | undefined {
 				: `This file (${(size / MB).toFixed(1)}MB) exceeds your VaultRelay size limit.`;
 				
 			return new Promise((resolve) => {
-				const { ReactNative } = require("@vendetta/metro/common");
-				
 				const handleCancel = () => resolve(originalUpload.apply(this, args));
 				const handleConfirm = () => {
 					doVaultUpload();
@@ -289,15 +287,41 @@ export function patchUploader(): (() => void) | undefined {
 					resolve(null);
 				};
 
-				ReactNative.Alert.alert(
-					"Upload to VaultRelay?",
-					`${reason} Do you want to intercept and upload it to your VaultRelay server instead?`,
-					[
-						{ text: "Cancel", style: "cancel", onPress: handleCancel },
-						{ text: "Upload", onPress: handleConfirm }
-					],
-					{ cancelable: false }
-				);
+				try {
+					const { ReactNative } = require("@vendetta/metro/common");
+					const Alert = findByProps("alert") ?? ReactNative?.Alert;
+					
+					if (Alert && Alert.alert) {
+						Alert.alert(
+							"Upload to VaultRelay?",
+							`${reason} Do you want to intercept and upload it to your VaultRelay server instead?`,
+							[
+								{ text: "Cancel", style: "cancel", onPress: handleCancel },
+								{ text: "Upload", onPress: handleConfirm }
+							],
+							{ cancelable: false }
+						);
+						return;
+					}
+				} catch (e) {
+					console.error("[VaultRelay] Failed to invoke native Alert", e);
+				}
+				
+				// Fallback to Vendetta's custom dialog if native Alert is missing or crashes
+				try {
+					const { showConfirmationAlert } = require("@vendetta/ui/alerts");
+					showConfirmationAlert({
+						title: "Upload to VaultRelay?",
+						content: `${reason} Do you want to intercept and upload it to your VaultRelay server instead?\n\n(WARNING: Do not tap outside this box or it will freeze!)`,
+						confirmText: "Upload",
+						cancelText: "Cancel",
+						onConfirm: handleConfirm,
+						onCancel: handleCancel
+					});
+				} catch (e) {
+					showToast("❌ VaultRelay: Failed to show confirmation dialog.");
+					handleCancel();
+				}
 			});
 		}
 
