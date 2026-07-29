@@ -112,6 +112,10 @@ export function patchUploadLimits(): (() => void) | undefined {
 					catch { Object.defineProperty(FileUtils, "maxFileSize", { value: real, writable: true, configurable: true }); }
 				});
 			}
+
+			if (typeof FileUtils.anyFileTooLarge === "function") unpatches.push(after("anyFileTooLarge", FileUtils, () => false));
+			if (typeof FileUtils.uploadSumTooLarge === "function") unpatches.push(after("uploadSumTooLarge", FileUtils, () => false));
+			if (typeof FileUtils.getMaxRequestSize === "function") unpatches.push(after("getMaxRequestSize", FileUtils, () => Number.MAX_SAFE_INTEGER));
 		} catch (e) {}
 	}
 	
@@ -196,8 +200,12 @@ export function patchUploader(): (() => void) | undefined {
 			this.size = 1337;
 			(async () => {
 				try {
+					let lastPct = 0;
 					const url = await uploadToFileHost(file as any, cfg, (pct) => {
-						if (pct % 25 === 0) showToast(`📤 Uploading... ${pct}%`, getAssetIDByName("ic_upload"));
+						if (pct >= lastPct + 25) {
+							lastPct = Math.floor(pct / 25) * 25;
+							showToast(`📤 Uploading... (${pct}%)`, getAssetIDByName("ic_upload"));
+						}
 					});
 					if (typeof this.setStatus === "function") this.setStatus("CANCELED");
 					if (typeof this.cancel === "function") this.cancel();
@@ -207,7 +215,6 @@ export function patchUploader(): (() => void) | undefined {
 						if (cfg.autoSend) {
 							sendMessageAggressive(channelId, url);
 						} else {
-							// Try ComponentDispatch, if it fails, copy to clipboard
 							let injected = false;
 							try {
 								const { ComponentDispatch } = findByProps("ComponentDispatch") || {};
@@ -220,9 +227,9 @@ export function patchUploader(): (() => void) | undefined {
 							if (!injected) {
 								let copied = false;
 								try {
-									const { clipboard } = require("@vendetta/metro/common");
-									if (clipboard && clipboard.setString) {
-										clipboard.setString(url);
+									const Clipboard = findByProps("setString", "getString");
+									if (Clipboard && Clipboard.setString) {
+										Clipboard.setString(url);
 										showToast("📋 Link copied to clipboard!", getAssetIDByName("ic_message_copy"));
 										copied = true;
 									}
@@ -232,9 +239,9 @@ export function patchUploader(): (() => void) | undefined {
 								
 								if (!copied) {
 									try {
-										const { ReactNative } = require("@vendetta/metro/common");
-										if (ReactNative && ReactNative.Share && ReactNative.Share.share) {
-											ReactNative.Share.share({ message: url });
+										const Share = findByProps("share", "sharedAction");
+										if (Share && Share.share) {
+											Share.share({ message: url });
 										}
 									} catch (e) {
 										console.error("[VaultRelay] Share fallback error:", e);
