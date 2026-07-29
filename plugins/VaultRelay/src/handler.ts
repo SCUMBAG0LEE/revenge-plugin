@@ -202,51 +202,49 @@ export function patchUploader(): (() => void) | undefined {
 			this.size = 1337;
 			(async () => {
 				try {
-					let lastPct = 0;
-					const url = await uploadToFileHost(file as any, cfg, (pct) => {
-						if (pct >= lastPct + 25) {
-							lastPct = Math.floor(pct / 25) * 25;
-							showToast(`📤 Uploading... (${pct}%)`, getAssetIDByName("ic_upload"));
-						}
-					});
+					showToast(`📤 Starting upload process...`, getAssetIDByName("ic_upload"));
+					const uploadInterval = setInterval(() => {
+						showToast(`📤 Uploading...`, getAssetIDByName("ic_upload"));
+					}, 4000);
+					
+					let url: string;
+					try {
+						url = await uploadToFileHost(file as any, cfg);
+					} finally {
+						clearInterval(uploadInterval);
+					}
+
 					if (typeof this.setStatus === "function") this.setStatus("CANCELED");
 					if (typeof this.cancel === "function") this.cancel();
 					if (channelId) cleanup(channelId);
-					showToast(`✅ Uploaded to VaultRelay!`, getAssetIDByName("Check"));
+					showToast(`✅ Uploading finished!`, getAssetIDByName("Check"));
+					
 					if (channelId) {
 						if (cfg.autoSend) {
 							sendMessageAggressive(channelId, url);
 						} else {
-							let injected = false;
+							let copied = false;
 							try {
-								const { ComponentDispatch } = findByProps("ComponentDispatch") || {};
-								if (ComponentDispatch && ComponentDispatch.dispatchToLastSubscribed) {
-									ComponentDispatch.dispatchToLastSubscribed("INSERT_TEXT", { plainText: `\n${url} ` });
-									injected = true;
+								if (clipboard && clipboard.setString) {
+									clipboard.setString(url);
+									showToast("📋 Link copied to clipboard!", getAssetIDByName("ic_message_copy"));
+									copied = true;
 								}
-							} catch (e) {}
+							} catch (e) {
+								console.error("[VaultRelay] Clipboard error:", e);
+							}
 							
-							if (!injected) {
-								let copied = false;
+							if (!copied) {
 								try {
-									if (clipboard && clipboard.setString) {
-										clipboard.setString(url);
-										showToast("📋 Link copied to clipboard!", getAssetIDByName("ic_message_copy"));
-										copied = true;
+									const { ReactNative } = require("@vendetta/metro/common");
+									if (ReactNative && ReactNative.Share && ReactNative.Share.share) {
+										ReactNative.Share.share({ message: url });
+									} else {
+										const Share = findByProps("share", "sharedAction");
+										if (Share && Share.share) Share.share({ message: url });
 									}
 								} catch (e) {
-									console.error("[VaultRelay] Clipboard error:", e);
-								}
-								
-								if (!copied) {
-									try {
-										const { ReactNative } = require("@vendetta/metro/common");
-										if (ReactNative && ReactNative.Share && ReactNative.Share.share) {
-											ReactNative.Share.share({ message: url });
-										}
-									} catch (e) {
-										console.error("[VaultRelay] Share fallback error:", e);
-									}
+									console.error("[VaultRelay] Share fallback error:", e);
 								}
 							}
 						}
