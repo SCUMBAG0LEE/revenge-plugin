@@ -19,13 +19,6 @@ function sendBotMessage(channelId: string, content: string, embeds: any[] = []) 
 
 	const msg = BotMessageCreator.createBotMessage({ channelId: cId, content: "", embeds });
 
-	// Megumin persona!
-	msg.author.username = "Megumin";
-	msg.author.avatar = "Megumin";
-	if (BotAvatars && BotAvatars.BOT_AVATARS) {
-		BotAvatars.BOT_AVATARS.Megumin = "https://static.wikia.nocookie.net/konosuba/images/9/96/Konosuba_-_Megumin_Cute_2.jpg";
-	}
-
 	if (typeof content === "string") {
 		msg.content = content;
 	} else {
@@ -104,19 +97,47 @@ export default {
 						return;
 					}
 
+					const targetPath = `/r/${subreddit}/${sort}?limit=100&raw_json=1`;
+					let urlsToTry = [`https://api.reddit.com${targetPath}`];
+					
+					// If the user specified a custom base URL in settings, try that exclusively (instead of default proxies)
+					if (storage.baseUrl && storage.baseUrl.trim() !== "" && storage.baseUrl !== "https://api.reddit.com") {
+						urlsToTry = [`${storage.baseUrl.replace(/\/$/, "")}${targetPath}`];
+					} else {
+						// Default dynamic proxy fallback list for DNS/Censorship bypass
+						urlsToTry.push(
+							`https://corsproxy.io/?https://api.reddit.com${targetPath}`,
+							`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.reddit.com${targetPath}`)}`
+						);
+					}
 
+					let json = null;
+					let fetchError = null;
 
-					let res = await fetch(`https://api.reddit.com/r/${subreddit}/${sort}?limit=100&raw_json=1`, {
-						headers: {
-							"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0",
-							"Accept": "application/json",
-						},
-					});
-					if (!res.ok) {
-						sendBotMessage(ctx.channel.id, `❌ Failed to fetch r/${subreddit} (HTTP ${res.status})`);
+					for (const url of urlsToTry) {
+						try {
+							let res = await fetch(url, {
+								headers: {
+									"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0",
+									"Accept": "application/json",
+								},
+							});
+							if (res.ok) {
+								const data = await res.json();
+								if (data?.data?.children) {
+									json = data;
+									break; // Success, exit loop
+								}
+							}
+						} catch (e: any) {
+							fetchError = e;
+						}
+					}
+
+					if (!json) {
+						sendBotMessage(ctx.channel.id, `❌ Failed to fetch r/${subreddit}. All endpoints and proxies failed or returned invalid data.\n${fetchError?.message || ""}`);
 						return;
 					}
-					let json = await res.json();
 
 					// Check NSFW if channel is not NSFW and nsfwwarn is on and it's NOT a silent message
 					if (!ctx.channel.nsfw_ && storage.nsfwwarn && !silent) {
@@ -134,55 +155,65 @@ export default {
 					const imageRegex = /\.(png|jpg|jpeg|gif|webp)$/i;
 					const isImageHost = (url: string) => url.includes("i.redd.it") || (url.includes("imgur.com") && !url.includes("/a/"));
 
-					const posts = json.data?.children?.filter((c: any) => {
+					let imagePosts = json.data?.children?.filter((c: any) => {
 						if (!c.data || c.data.is_video) return false;
-						// Some subreddits use 'url_overridden_by_dest' for the actual media link
 						const url = c.data.url_overridden_by_dest || c.data.url;
 						if (!url) return false;
-						// Strict check to ensure the URL is actually an image
 						return imageRegex.test(url) || isImageHost(url);
 					});
 
-					if (!posts || posts.length === 0) {
-						sendBotMessage(ctx.channel.id, `❌ No suitable images found in r/${subreddit}.`);
-						return;
+					let fallbackWarning = "";
+					let finalPost;
+					let isImage = true;
+
+					if (!imagePosts || imagePosts.length === 0) {
+						// Fallback to text posts
+						let textPosts = json.data?.children?.filter((c: any) => {
+							if (!c.data || c.data.is_video) return false;
+							return c.data.selftext || c.data.url;
+						});
+
+						if (!textPosts || textPosts.length === 0) {
+							sendBotMessage(ctx.channel.id, `❌ No suitable posts found in r/${subreddit}.`);
+							return;
+						}
+						
+						fallbackWarning = "⚠️ *Couldn't find any image posts. Falling back to a text/link post instead!*\n\n";
+						finalPost = textPosts[Math.floor(Math.random() * textPosts.length)].data;
+						isImage = false;
+					} else {
+						finalPost = imagePosts[Math.floor(Math.random() * imagePosts.length)].data;
 					}
 
-					const post = posts[Math.floor(Math.random() * posts.length)].data;
-					const imgUrl = post.url_overridden_by_dest?.replace(/\.gifv$/g, ".gif") ?? post.url?.replace(/\.gifv$/g, ".gif");
+					const postUrl = finalPost.url_overridden_by_dest ?? finalPost.url;
+					let imgUrl = postUrl;
+					if (isImage) {
+						imgUrl = postUrl?.replace(/\.gifv$/g, ".gif");
+					}
 
-					const embed = {
+					const embed: any = {
 						type: "rich",
-						title: post.title,
-						url: `https://reddit.com${post.permalink}`,
+						title: finalPost.title,
+						url: `https://reddit.com${finalPost.permalink}`,
 						author: {
-							name: `u/${post.author} • r/${post.subreddit}`,
+							name: `u/${finalPost.author} • r/${finalPost.subreddit}`,
 						},
-						image: {
-							url: imgUrl,
-						},
-						color: 0xdd2e44, // Megumin crimson red!
+						color: 0xdd2e44, 
 					};
 
-					if (silent) {
-						sendBotMessage(ctx.channel.id, "", [embed]);
+					if (isImage) {
+						embed.image = { url: imgUrl };
 					} else {
-						const cId = ctx.channel?.id ?? ChannelStore?.getChannelId?.() ?? ChannelStore?.getLastSelectedChannelId?.();
-						
-						// Try to find the actual user message sender. Usually it's in the same module as receiveMessage
-						const UserMessageSender = findByProps("sendMessage", "receiveMessage") || findByProps("sendMessage", "editMessage");
-						
-						if (UserMessageSender && cId) {
-							// Discord's sendMessage usually expects a specific object structure for user messages
-							UserMessageSender.sendMessage(cId, {
-								content: imgUrl,
-								invalidEmojis: [],
-								validNonShortcutEmojis: [],
-								tts: false
-							});
-						} else {
-							showToast("❌ Could not find MessageSender module or Channel ID!", getAssetIDByName("ic_warning_24px"));
-						}
+						// For text posts, set the description
+						let desc = finalPost.selftext || finalPost.url;
+						if (desc && desc.length > 2000) desc = desc.substring(0, 1997) + "...";
+						embed.description = desc;
+					}
+
+					if (silent) {
+						sendBotMessage(ctx.channel.id, fallbackWarning, [embed]);
+					} else {
+						return { content: fallbackWarning + (isImage ? imgUrl : `https://reddit.com${finalPost.permalink}`) };
 					}
 				} catch (err: any) {
 					logger.log(err);

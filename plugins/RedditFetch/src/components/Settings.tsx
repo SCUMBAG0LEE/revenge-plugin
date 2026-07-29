@@ -22,6 +22,15 @@ export default function Settings() {
 					}}
 				/>
 
+				<FormInput
+					title="API Base URL (Proxy/DNS Bypass)"
+					placeholder="https://api.reddit.com"
+					value={storage.baseUrl || ""}
+					onChange={(val: string) => {
+						storage.baseUrl = val.trim();
+					}}
+				/>
+
 				<FormSwitchRow
 					label="NSFW Warning"
 					subLabel="Warn when sending an NSFW image in a non-NSFW channel."

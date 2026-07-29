@@ -12,9 +12,26 @@ const CloudUpload = findByProps("CloudUpload")?.CloudUpload;
 const MessageSender = findByProps("sendMessage", "editMessage");
 const ChannelStore = findByProps("getChannelId");
 const UploadLimits = findByProps("getMaxFileSize");
+const PendingMessages = findByProps("getPendingMessages", "deletePendingMessage");
 
 const MB = 1024 * 1024;
 export let realMaxFileSize = 10 * MB; // fallback to 10MB
+
+function cleanup(channelId: string) {
+	try {
+		const pending = PendingMessages?.getPendingMessages?.(channelId);
+		if (!pending) return;
+
+		for (const [messageId, message] of Object.entries(pending)) {
+			if ((message as any).state === "FAILED") {
+				PendingMessages.deletePendingMessage(channelId, messageId);
+				console.log(`[VaultRelay] Deleted failed message: ${messageId}`);
+			}
+		}
+	} catch (err) {
+		console.warn("[VaultRelay] Failed to delete pending messages:", err);
+	}
+}
 
 export function patchUploadLimits(): (() => void) | undefined {
 	const UploadLimits = findByProps("DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE");
@@ -121,14 +138,15 @@ export function patchUploader(): (() => void) | undefined {
 				},
 			);
 
+			const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
 			if (typeof this.setStatus === "function") this.setStatus("CANCELED");
+			if (channelId) setTimeout(() => cleanup(channelId), 500);
 
 			showToast(
 				`✅ Uploaded to VaultRelay!`,
 				getAssetIDByName("Check"),
 			);
 
-			const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
 			if (channelId && MessageSender) {
 				MessageSender.sendMessage(channelId, { content: url });
 			}
@@ -138,7 +156,9 @@ export function patchUploader(): (() => void) | undefined {
 				getAssetIDByName("Small"),
 			);
 			console.error("[VaultRelay] Upload error:", err);
+			const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
 			if (typeof this.setStatus === "function") this.setStatus("CANCELED");
+			if (channelId) setTimeout(() => cleanup(channelId), 500);
 		}
 
 		return null;

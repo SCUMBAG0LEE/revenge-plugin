@@ -7,8 +7,8 @@ Fetch random posts and images from any subreddit using a slick slash command in 
 ## ✨ Features
 
 - **Slash Command**: Use `/reddit [subreddit] [sort] [silent]` anywhere.
-- **Megumin Persona**: When posting silently, the embed is sent locally using a custom Megumin bot profile!
 - **Dynamic NSFW Safety**: Automatically blocks NSFW Reddit posts if you try to use the command in an SFW Discord channel, preventing accidental bans.
+- **DNS Censorship Bypass**: Set a custom API Base URL to route requests through a proxy or alternative frontend to bypass ISP or regional blocks.
 - **Smart Embeds**: Automatically converts `.gifv` links to `.gif` so they render properly in the Discord app.
 
 ## ⚙️ Plugin Settings
@@ -16,5 +16,6 @@ Fetch random posts and images from any subreddit using a slick slash command in 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Default Subreddit | `Megumin` | The subreddit to fetch from if you run `/reddit` without arguments. |
+| API Base URL | `https://api.reddit.com` | Custom endpoint for API requests. Useful for bypassing DNS blocking via proxies. |
 | NSFW Warning | `true` | Prevent fetching NSFW posts while inside SFW channels. |
 | Default Sort | `Hot` | How to sort the posts (Hot, New, Top, Best, etc). |

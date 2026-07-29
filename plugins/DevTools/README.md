@@ -10,7 +10,9 @@ A powerful developer plugin for the **Discord Revenge** client. This plugin equi
     - `fuzzy`: Finds modules containing your query substring.
     - `exact`: Finds a module matching your exact property name.
     - `dump_all`: Literally dumps every single Discord module in memory.
-  - **`to_clipboard`**: Toggle this to securely copy the giant JSON output straight to your phone's clipboard, bypassing chat spam and Discord's 2000-character limit completely!
+  - **`output`**: 
+    - `share`: Outputs to the OS Share menu. Massive outputs (e.g. `dump_all`) are automatically securely uploaded to `paste.gg` to prevent Android intent size limits!
+    - `chat`: Chunks the output into 1900-character segments directly in the chat view.
 
 ## 📥 Installation
 

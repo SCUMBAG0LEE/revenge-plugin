@@ -13,13 +13,7 @@ function getChannelId(ctxChannelId: string) {
 
 function createLocalMessage(cId: string, content: string) {
 	if (!BotMessageCreator || !MessageActions || !cId) return null;
-	const msg = BotMessageCreator.createBotMessage({ channelId: cId, content });
-	msg.author.username = "DevTools";
-	msg.author.avatar = "DevTools";
-	if (BotAvatars && BotAvatars.BOT_AVATARS) {
-		BotAvatars.BOT_AVATARS.DevTools = "https://cdn.discordapp.com/embed/avatars/0.png";
-	}
-	return msg;
+	return BotMessageCreator.createBotMessage({ channelId: cId, content });
 }
 
 const unpatches: (() => void)[] = [];
@@ -40,11 +34,11 @@ export default {
 					required: false,
 					type: 3, // STRING
 					choices: [
-						{ name: "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", displayName: "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", value: "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE" },
-						{ name: "CloudUpload", displayName: "CloudUpload", value: "CloudUpload" },
+						{ name: "ThemeStore", displayName: "ThemeStore", value: "ThemeStore" },
+						{ name: "ChannelStore", displayName: "ChannelStore", value: "ChannelStore" },
 						{ name: "sendMessage", displayName: "sendMessage", value: "sendMessage" },
-						{ name: "receiveMessage", displayName: "receiveMessage", value: "receiveMessage" },
-						{ name: "getCurrentUser", displayName: "getCurrentUser", value: "getCurrentUser" }
+						{ name: "DCDFileManager", displayName: "DCDFileManager", value: "DCDFileManager" },
+						{ name: "CloudUpload", displayName: "CloudUpload", value: "CloudUpload" }
 					]
 				},
 				{
@@ -68,7 +62,6 @@ export default {
 					required: false,
 					type: 3, // STRING
 					choices: [
-						{ name: "clipboard", displayName: "clipboard (Copy directly to device)", value: "clipboard" },
 						{ name: "share", displayName: "share (Open OS Share menu to save/export)", value: "share" },
 						{ name: "chat", displayName: "chat (Chunked chat messages)", value: "chat" }
 					]
@@ -80,7 +73,7 @@ export default {
 			execute: (args: any, ctx: any) => {
 				const query = args.find((a: any) => a.name === "query")?.value;
 				const mode = args.find((a: any) => a.name === "mode")?.value || "fuzzy";
-				const output = args.find((a: any) => a.name === "output")?.value || "clipboard";
+				const output = args.find((a: any) => a.name === "output")?.value || "share";
 				const cId = getChannelId(ctx.channel?.id);
 				
 				if (!cId) return;
@@ -138,35 +131,53 @@ export default {
 							}
 						}
 
-						if (output === "clipboard") {
-							if (clipboard && clipboard.setString) {
-								clipboard.setString(resultText);
-								if (resultText.length > 150000) {
-									statusMsg.content = `⚠️ **Warning:** Output is ${resultText.length} bytes, which exceeds Android's clipboard limit and was likely truncated. Use \`output: share\` for massive dumps!\n\n✅ Copied to clipboard. (${results.length} modules found)`;
-								} else {
-									statusMsg.content = `✅ Debug process done! Result has been securely copied to your clipboard. (${results.length} modules found)`;
-								}
-							} else {
-								statusMsg.content = `❌ Clipboard API is not available on your client!`;
-							}
-							MessageActions.receiveMessage(cId, statusMsg);
-						} else if (output === "share") {
-							// Use React Native's Share API to open the OS share sheet
-							const { Share } = findByProps("Share") || require("react-native");
-							if (Share && Share.share) {
-								statusMsg.content = `✅ Debug process done! Opening OS Share menu... (${results.length} modules found)`;
+						if (output === "share") {
+							if (resultText.length > 500000) {
+								statusMsg.content = `⏳ Output is very large (${resultText.length} bytes). Uploading to paste.gg...`;
 								MessageActions.receiveMessage(cId, statusMsg);
-								
-								Share.share({
-									message: resultText,
-									title: `DevTools Dump (${results.length} modules)`
+
+								fetch("https://api.paste.gg/v1/pastes", {
+									method: "POST",
+									headers: { "Content-Type": "application/json" },
+									body: JSON.stringify({
+										name: "DevTools Dump",
+										files: [{ name: "dump.txt", content: { format: "text", value: resultText } }]
+									})
+								}).then(r => r.json()).then((json: any) => {
+									if (json.status === "success") {
+										const shareUrl = `https://paste.gg/p/anonymous/${json.result.id}`;
+										const { Share } = findByProps("Share") || require("react-native");
+										if (Share?.share) {
+											statusMsg.content = `✅ Debug process done! Opening OS Share menu with paste URL...`;
+											MessageActions.receiveMessage(cId, statusMsg);
+											Share.share({ message: shareUrl }).catch((err: any) => {
+												statusMsg.content = `❌ Share failed: ${err.message}\nURL: ${shareUrl}`;
+												MessageActions.receiveMessage(cId, statusMsg);
+											});
+										} else {
+											statusMsg.content = `✅ Uploaded to paste.gg: ${shareUrl}`;
+											MessageActions.receiveMessage(cId, statusMsg);
+										}
+									} else {
+										throw new Error(json.error || "Unknown paste.gg error");
+									}
 								}).catch((err: any) => {
-									statusMsg.content = `❌ Share failed: ${err.message}`;
+									statusMsg.content = `❌ Upload failed: ${err.message}`;
 									MessageActions.receiveMessage(cId, statusMsg);
 								});
 							} else {
-								statusMsg.content = `❌ Share API is not available on your client!`;
-								MessageActions.receiveMessage(cId, statusMsg);
+								const { Share } = findByProps("Share") || require("react-native");
+								if (Share?.share) {
+									statusMsg.content = `✅ Debug process done! Opening OS Share menu...`;
+									MessageActions.receiveMessage(cId, statusMsg);
+									Share.share({ message: resultText, title: "DevTools Dump" }).catch((err: any) => {
+										statusMsg.content = `❌ Share failed: ${err.message}`;
+										MessageActions.receiveMessage(cId, statusMsg);
+									});
+								} else {
+									statusMsg.content = `❌ Share API is not available on your client!`;
+									MessageActions.receiveMessage(cId, statusMsg);
+								}
 							}
 						} else {
 							// Chat chunking
@@ -179,6 +190,7 @@ export default {
 								if (chunkMsg) MessageActions.receiveMessage(cId, chunkMsg);
 							}
 						}
+
 					} catch (e: any) {
 						statusMsg.content = `❌ Error searching props:\n\`\`\`js\n${e.message}\n\`\`\``;
 						MessageActions.receiveMessage(cId, statusMsg);

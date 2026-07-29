@@ -6,9 +6,9 @@ A collection of high-quality plugins for the **Discord Revenge** client. This re
 
 | Plugin | Description | Install Link |
 |--------|-------------|--------------|
-| [**VaultRelay**](./plugins/VaultRelay) | Self-hosted, zero-buffer file uploader for oversized attachments. | `https://scumbag0lee.github.io/revenge-plugin/VaultRelay/` |
-| [**RedditFetch**](./plugins/RedditFetch) | Fetch random images from any subreddit using a slick slash command. | `https://scumbag0lee.github.io/revenge-plugin/RedditFetch/` |
-| [**DevTools**](./plugins/DevTools) | Essential developer tools for Vendetta, including `/debug-props` and `/eval`. | `https://scumbag0lee.github.io/revenge-plugin/DevTools/` |
+| [**VaultRelay**](./plugins/VaultRelay) | Self-hosted, zero-buffer file uploader for oversized attachments with automatic UI state cleanup. | `https://scumbag0lee.github.io/revenge-plugin/VaultRelay/` |
+| [**RedditFetch**](./plugins/RedditFetch) | Fetch random images from any subreddit. Includes custom DNS/Proxy bypass feature. | `https://scumbag0lee.github.io/revenge-plugin/RedditFetch/` |
+| [**DevTools**](./plugins/DevTools) | Essential developer tools for Vendetta. Features massive output handling via paste.gg integration. | `https://scumbag0lee.github.io/revenge-plugin/DevTools/` |
 
 > *Click on a plugin's name above to view its detailed documentation, server setup guides, and features!*
 

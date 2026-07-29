@@ -10,6 +10,7 @@ A high-performance self-hosted file uploader plugin for **Discord Revenge** that
 - **Self-hosted** — Upload to your own server (e.g. `https://megumin.me/grimoire`) with zero third-party reliance.
 - **Secure** — Bearer token authentication prevents unauthorized uploads.
 - **Ultra-Fast** — OpenResty (Nginx + Lua) streams uploads directly to disk with zero buffering.
+- **UI State Cleanup** — Automatically deletes native Discord "Upload Failed" messages to prevent UI clutter when intercepting attachments.
 - **Configurable** — Easily adjust server URL, auth token, and size threshold from the plugin settings page.
 
 ## 🖥️ Server Setup (OpenResty)
