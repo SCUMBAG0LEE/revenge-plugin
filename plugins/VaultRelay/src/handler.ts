@@ -210,10 +210,27 @@ export function patchUploader(): (() => void) | undefined {
 							} catch (e) {}
 							
 							if (!injected) {
-								const { clipboard } = require("@vendetta/metro/common");
-								if (clipboard && clipboard.setString) {
-									clipboard.setString(url);
-									showToast("📋 Link copied to clipboard!", getAssetIDByName("ic_message_copy"));
+								let copied = false;
+								try {
+									const { clipboard } = require("@vendetta/metro/common");
+									if (clipboard && clipboard.setString) {
+										clipboard.setString(url);
+										showToast("📋 Link copied to clipboard!", getAssetIDByName("ic_message_copy"));
+										copied = true;
+									}
+								} catch (e) {
+									console.error("[VaultRelay] Clipboard error:", e);
+								}
+								
+								if (!copied) {
+									try {
+										const { ReactNative } = require("@vendetta/metro/common");
+										if (ReactNative && ReactNative.Share && ReactNative.Share.share) {
+											ReactNative.Share.share({ message: url });
+										}
+									} catch (e) {
+										console.error("[VaultRelay] Share fallback error:", e);
+									}
 								}
 							}
 						}

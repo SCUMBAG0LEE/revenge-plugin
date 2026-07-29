@@ -257,24 +257,24 @@ export default {
 						author: {
 							name: `u/${finalPost.author} • r/${finalPost.subreddit}`,
 						},
-						color: 0xdd2e44, 
+						color: 0xff4500, // Reddit Orange
 					};
+
+					let desc = finalPost.selftext || finalPost.url;
+					if (desc && desc.length > 2000) desc = desc.substring(0, 1997) + "...";
+					if (desc) embed.description = desc;
 
 					if (isImage) {
 						embed.image = { url: imgUrl };
-					} else {
-						// For text posts, set the description
-						let desc = finalPost.selftext || finalPost.url;
-						if (desc && desc.length > 2000) desc = desc.substring(0, 1997) + "...";
-						embed.description = desc;
 					}
 
 					if (silent) {
 						sendBotMessage(ctx.channel.id, "", [embed]);
 					} else {
 						const postLink = `https://reddit.com${finalPost.permalink}`;
-						const text = isImage ? `<${postLink}> [\u200B](${imgUrl})` : postLink;
-						sendMessageAggressive(ctx.channel.id, fallbackWarning + text);
+						// The user prefers Discord's native auto-embed which includes title/description/image.
+						// Sending the raw link natively triggers this embed perfectly for other users.
+						sendMessageAggressive(ctx.channel.id, fallbackWarning + postLink);
 					}
 				} catch (err: any) {
 					logger.log(err);

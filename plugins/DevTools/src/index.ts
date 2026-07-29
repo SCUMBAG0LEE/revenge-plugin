@@ -31,17 +31,10 @@ export default {
 				{
 					name: "query",
 					displayName: "query",
-					description: "What to search for (choose preset or type custom)",
+					description: "What to search for (type custom string)",
 					displayDescription: "What to search for",
 					required: false,
 					type: 3, // STRING
-					choices: [
-						{ name: "MessageActions", displayName: "MessageActions", value: "MessageActions" },
-						{ name: "MessageEvents", displayName: "MessageEvents", value: "MessageEvents" },
-						{ name: "sendMessage", displayName: "sendMessage", value: "sendMessage" },
-						{ name: "NativeModules", displayName: "NativeModules", value: "NativeModules" },
-						{ name: "CloudUpload", displayName: "CloudUpload", value: "CloudUpload" }
-					]
 				},
 				{
 					name: "mode",
