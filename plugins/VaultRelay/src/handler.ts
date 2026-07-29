@@ -166,7 +166,6 @@ function cleanup(channelId: string) {
 	}, 500);
 }
 
-import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
 export function patchUploader(): (() => void) | undefined {
 	if (!CloudUpload) {
@@ -273,27 +272,32 @@ export function patchUploader(): (() => void) | undefined {
 			})();
 		};
 
-		if (!cfg.autoUpload && showConfirmationAlert) {
+		if (!cfg.autoUpload) {
 			const reason = exceedsDiscordLimit && !exceedsUserLimit
-				? `This file (${(size / MB).toFixed(1)}MB) exceeds Discord's hard limit of ${(realMaxFileSize / MB).toFixed(1)}MB.`
+				? `This file (${(size / MB).toFixed(1)}MB) exceeds Discord's hard limit of ${(dynamicRealLimit / MB).toFixed(1)}MB.`
 				: `This file (${(size / MB).toFixed(1)}MB) exceeds your VaultRelay size limit.`;
 				
 			return new Promise((resolve) => {
-				showConfirmationAlert({
-					title: "Upload to VaultRelay?",
-					content: `${reason} Do you want to intercept and upload it to your VaultRelay server instead?`,
-					confirmText: "Upload",
-					cancelText: "Cancel",
-					onConfirm: () => {
-						doVaultUpload();
-						if (typeof this.setStatus === "function") this.setStatus("CANCELED");
-						if (typeof this.cancel === "function") this.cancel();
-						resolve(null);
-					},
-					onCancel: () => {
-						resolve(originalUpload.apply(this, args));
-					}
-				});
+				const { ReactNative } = require("@vendetta/metro/common");
+				
+				const handleCancel = () => resolve(originalUpload.apply(this, args));
+				const handleConfirm = () => {
+					doVaultUpload();
+					if (typeof this.setStatus === "function") this.setStatus("CANCELED");
+					if (typeof this.cancel === "function") this.cancel();
+					if (channelId) cleanup(channelId);
+					resolve(null);
+				};
+
+				ReactNative.Alert.alert(
+					"Upload to VaultRelay?",
+					`${reason} Do you want to intercept and upload it to your VaultRelay server instead?`,
+					[
+						{ text: "Cancel", style: "cancel", onPress: handleCancel },
+						{ text: "Upload", onPress: handleConfirm }
+					],
+					{ cancelable: false }
+				);
 			});
 		}
 
