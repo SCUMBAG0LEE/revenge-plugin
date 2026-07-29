@@ -270,9 +270,11 @@ export default {
 					}
 
 					if (silent) {
-						sendBotMessage(ctx.channel.id, fallbackWarning, [embed]);
+						sendBotMessage(ctx.channel.id, "", [embed]);
 					} else {
-						sendMessageAggressive(ctx.channel.id, fallbackWarning + (isImage ? imgUrl : `https://reddit.com${finalPost.permalink}`));
+						const postLink = `https://reddit.com${finalPost.permalink}`;
+						const text = isImage ? `<${postLink}> [\u200B](${imgUrl})` : postLink;
+						sendMessageAggressive(ctx.channel.id, fallbackWarning + text);
 					}
 				} catch (err: any) {
 					logger.log(err);

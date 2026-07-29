@@ -74,42 +74,40 @@ const sendMessageAggressive = async (channelId: string, content: string) => {
 
 export function patchUploadLimits(): (() => void) | undefined {
 	const UploadLimits = findByProps("DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE");
-	if (!UploadLimits) {
-		console.warn("[VaultRelay] UploadLimits module not found — UI limit patching skipped");
-		return undefined;
+	const MaxSizeModule = findByProps("getMaxFileSize");
+	
+	const unpatches: (() => void)[] = [];
+
+	if (UploadLimits) {
+		try {
+			const realLimit = UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE;
+			if (typeof realLimit === "number") {
+				realMaxFileSize = realLimit;
+			}
+
+			try { UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = Number.MAX_SAFE_INTEGER; } 
+			catch { Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", { value: Number.MAX_SAFE_INTEGER, writable: true, configurable: true }); }
+
+			unpatches.push(() => {
+				try { UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = realLimit; } 
+				catch { Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", { value: realLimit, writable: true, configurable: true }); }
+			});
+		} catch (err) {
+			console.error("[VaultRelay] Failed to patch UploadLimits constant:", err);
+		}
+	}
+
+	if (MaxSizeModule && typeof MaxSizeModule.getMaxFileSize === "function") {
+		try {
+			// Hook getMaxFileSize to always return a massive number
+			const unpatchGetMax = after("getMaxFileSize", MaxSizeModule, () => {
+				return Number.MAX_SAFE_INTEGER;
+			});
+			unpatches.push(unpatchGetMax);
+		} catch (e) {}
 	}
 	
-	try {
-		const realLimit = UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE;
-		if (typeof realLimit === "number") {
-			realMaxFileSize = realLimit;
-		}
-
-		try {
-			UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = Number.MAX_SAFE_INTEGER;
-		} catch {
-			Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", {
-				value: Number.MAX_SAFE_INTEGER,
-				writable: true,
-				configurable: true
-			});
-		}
-
-		return () => {
-			try {
-				UploadLimits.DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE = realLimit;
-			} catch {
-				Object.defineProperty(UploadLimits, "DEFAULT_MOBILE_PRE_COMPRESSION_MAX_ATTACHMENT_SIZE", {
-					value: realLimit,
-					writable: true,
-					configurable: true
-				});
-			}
-		};
-	} catch (err) {
-		console.error("[VaultRelay] Failed to patch UploadLimits:", err);
-		return undefined;
-	}
+	return () => unpatches.forEach(u => u());
 }
 
 function cleanup(channelId: string) {
