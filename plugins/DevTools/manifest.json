@@ -1,0 +1,10 @@
+{
+	"name": "DevTools",
+	"description": "Essential developer tools for Vendetta, including /debug-props and /eval.",
+	"authors": [{ "name": "SCUMBAG0LEE" }],
+	"main": "src/index.ts",
+	"vendetta": {
+		"icon": "ic_bug",
+		"original": "scumbag0lee.github.io/revenge-plugin/DevTools/"
+	}
+}

@@ -55,14 +55,22 @@ export function patchUploader(): (() => void) | undefined {
 
 	CloudUpload.prototype.reactNativeCompressAndExtractData = async function (...args: any[]) {
 		const file = this;
-		const size = file?.preCompressionSize ?? file?.size ?? 0;
+		// If size is missing or 0, assume it's large so we don't accidentally skip it
+		let size = file?.preCompressionSize ?? file?.size ?? file?.currentSize;
+		if (typeof size !== "number" || size === 0) size = Number.MAX_SAFE_INTEGER;
+		
 		const cfg = storage as unknown as PluginStorage;
 		const manualSetting = cfg.maxFileSizeMB ?? -1;
 		const maxBytes = manualSetting < 0 ? realMaxFileSize : (manualSetting * MB);
 
-		if (!cfg.apiToken) return originalUpload.apply(this, args);
+		showToast(`Debug VR: preComp=${this?.preCompressionSize}, size=${this?.size}, max=${maxBytes}`, getAssetIDByName("ic_info"));
 
 		if (size <= maxBytes) return originalUpload.apply(this, args);
+
+		if (!cfg.apiToken) {
+			showToast("⚠️ VaultRelay: Missing API Token in settings! Uploading to Discord normally...", getAssetIDByName("ic_warning_24px"));
+			return originalUpload.apply(this, args);
+		}
 
 		// Bypass Discord's file size limit check by spoofing the size
 		this.preCompressionSize = 1337;

@@ -104,11 +104,7 @@ export default {
 						return;
 					}
 
-					try {
-						const lim = findByProps("getMaxFileSize");
-						const msg = findByProps("sendMessage", "editMessage");
-						showToast(`Debug: msg=${!!msg}, lim=${!!lim}`, getAssetIDByName("ic_info"));
-					} catch (e) { }
+
 
 					let res = await fetch(`https://api.reddit.com/r/${subreddit}/${sort}?limit=100&raw_json=1`, {
 						headers: {
@@ -161,8 +157,16 @@ export default {
 						sendBotMessage(ctx.channel.id, "", [embed]);
 					} else {
 						const cId = ctx.channel?.id ?? ChannelStore?.getChannelId?.() ?? ChannelStore?.getLastSelectedChannelId?.();
-						if (MessageSender && cId) {
-							MessageSender.sendMessage(cId, { content: imgUrl });
+						const ActualSender = findByProps("sendMessage", "receiveMessage") ?? findByProps("sendMessage", "editMessage");
+						
+						if (ActualSender && cId) {
+							await ActualSender.sendMessage(cId, {
+								content: imgUrl,
+								validNonShortcutEmojis: [],
+								tts: false
+							});
+						} else {
+							showToast("❌ Could not find MessageSender module or Channel ID!", getAssetIDByName("ic_warning_24px"));
 						}
 					}
 				} catch (err: any) {

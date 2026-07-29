@@ -159,6 +159,9 @@ for (const plugin of plugins.length ? plugins : await readdir('./plugins')) {
         manifest.hash = await hasher.update(code).digest('hex')
         await Bun.write(`./dist/${plugin}/manifest.json`, JSON.stringify(manifest))
 
+        // Generate a fallback index.html to prevent 404s when users click the plugin link
+        await Bun.write(`./dist/${plugin}/index.html`, `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://scumbag0lee.github.io/revenge-plugin/"></head><body><p>This is a Revenge plugin. Copy this URL into the Revenge plugin installer in Discord.</p></body></html>`);
+
         builtPlugins.push({ name: manifest.name, description: manifest.description || "Discord Revenge Plugin", folder: plugin });
         console.log(`✅ Successfully built: ${manifest.name}`)
     } catch (e) {
