@@ -31,17 +31,22 @@ export default {
 
 				let report = "**🧪 Advanced Sandbox Report**\n\n";
 
-				// Test 1: Real Message Sender
+				// Test 1: Real Message Sender (With Nonce)
 				try {
-					const Sender = findByProps("sendMessage", "editMessage");
-					if (!Sender) throw new Error("Could not find MessageSender module");
+					const MessageActions = findByProps("receiveMessage", "sendClydeError") ?? findByProps("receiveMessage");
+					const NonceMaker = findByProps("generateNonce");
 					
-					// Send a REAL message to the channel, not a local bot message
-					Sender.sendMessage(cId, { 
-						content: "🧪 Hello from Advanced Sandbox! If you see this, real message sending works!", 
+					if (!MessageActions || !MessageActions.sendMessage) throw new Error("Could not find MessageActions.sendMessage");
+					
+					const nonce = NonceMaker?.generateNonce ? NonceMaker.generateNonce() : "123456789012345678";
+					
+					// Send a REAL message to the channel using MessageActions
+					MessageActions.sendMessage(cId, { 
+						content: "🧪 Hello from Advanced Sandbox! This test includes a nonce!", 
+						nonce: nonce,
 						validNonShortcutEmojis: [] 
 					});
-					report += `✅ \`real_msg\`: Successfully triggered MessageSender (check if real message appeared!)\n`;
+					report += `✅ \`real_msg\`: Executed MessageActions.sendMessage with nonce (check if message appeared!)\n`;
 				} catch (e: any) {
 					report += `❌ \`real_msg\` Failed: ${e.message}\n`;
 				}
@@ -68,34 +73,34 @@ export default {
 					report += `❌ \`vault_upload\` Network Error: ${e.message}\n`;
 				}
 
-				// Test 3: 5MB Payload to Pastebins
+				// Test 3: 15MB Payload to Pastebins
 				try {
-					// Generate 5MB string
-					const massiveString = "A".repeat(5 * 1024 * 1024);
+					// Generate 15MB string
+					const massiveString = "A".repeat(15 * 1024 * 1024);
 					
 					try {
 						const r1 = await fetch("https://haste.zneix.eu/documents", { method: "POST", body: massiveString });
 						if (r1.ok) {
-							report += `✅ \`5MB haste.zneix.eu\`: Success\n`;
+							report += `✅ \`15MB haste.zneix.eu\`: Success\n`;
 						} else {
-							report += `❌ \`5MB haste.zneix.eu\`: Failed HTTP ${r1.status} - ${await r1.text()}\n`;
+							report += `❌ \`15MB haste.zneix.eu\`: Failed HTTP ${r1.status} - ${await r1.text()}\n`;
 						}
 					} catch (e: any) {
-						report += `❌ \`5MB haste.zneix.eu\` Crash: ${e.message}\n`;
+						report += `❌ \`15MB haste.zneix.eu\` Crash: ${e.message}\n`;
 					}
 					
 					try {
 						const r2 = await fetch("https://paste.nomsy.net/documents", { method: "POST", body: massiveString });
 						if (r2.ok) {
-							report += `✅ \`5MB paste.nomsy\`: Success\n`;
+							report += `✅ \`15MB paste.nomsy\`: Success\n`;
 						} else {
-							report += `❌ \`5MB paste.nomsy\`: Failed HTTP ${r2.status} - ${await r2.text()}\n`;
+							report += `❌ \`15MB paste.nomsy\`: Failed HTTP ${r2.status} - ${await r2.text()}\n`;
 						}
 					} catch (e: any) {
-						report += `❌ \`5MB paste.nomsy\` Crash: ${e.message}\n`;
+						report += `❌ \`15MB paste.nomsy\` Crash: ${e.message}\n`;
 					}
 				} catch (e: any) {
-					report += `❌ \`5MB payload generator\` Failed: ${e.message}\n`;
+					report += `❌ \`15MB payload generator\` Failed: ${e.message}\n`;
 				}
 
 				// Send final report

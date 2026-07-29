@@ -133,42 +133,37 @@ export default {
 
 						if (output === "share") {
 							if (resultText.length > 500000) {
-								statusMsg.content = `⏳ Output is very large (${resultText.length} bytes). Uploading to pastebin...`;
+								statusMsg.content = `⏳ Output is very large (${(resultText.length / 1024 / 1024).toFixed(2)} MB). Chunking and uploading to pastebins...`;
 								MessageActions.receiveMessage(cId, statusMsg);
 
 								const tryUpload = async () => {
-									const endpoints = [
-										"https://haste.zneix.eu/documents",
-										"https://paste.nomsy.net/documents"
-									];
+									const chunkSize = 3 * 1024 * 1024; // 3MB chunks to bypass 413 errors
+									const chunks = resultText.match(new RegExp(`[\\s\\S]{1,${chunkSize}}`, 'g')) || [];
+									const urls: string[] = [];
 									
-									for (const url of endpoints) {
-										try {
-											const r = await fetch(url, { method: "POST", body: resultText });
-											if (r.ok) {
-												const json = await r.json();
-												if (json.key) {
-													return url.replace("/documents", "") + "/" + json.key;
-												}
-											}
-										} catch (e) {
-											// Ignore and try next
-										}
+									for (let i = 0; i < chunks.length; i++) {
+										statusMsg.content = `⏳ Uploading chunk ${i + 1} of ${chunks.length}...`;
+										MessageActions.receiveMessage(cId, statusMsg);
+										
+										const r = await fetch("https://haste.zneix.eu/documents", { method: "POST", body: chunks[i] });
+										if (!r.ok) throw new Error(`Chunk ${i+1} failed: HTTP ${r.status}`);
+										const json = await r.json();
+										urls.push(`https://haste.zneix.eu/${json.key}`);
 									}
-									throw new Error("All paste endpoints failed (Network Request Failed or Payload too large)");
+									return urls.join("\n");
 								};
 
-								tryUpload().then((shareUrl) => {
+								tryUpload().then((shareUrls) => {
 									const { Share } = findByProps("Share") || require("react-native");
 									if (Share?.share) {
-										statusMsg.content = `✅ Debug process done! Opening OS Share menu with paste URL...`;
+										statusMsg.content = `✅ Debug process done! Opening OS Share menu with paste URLs...`;
 										MessageActions.receiveMessage(cId, statusMsg);
-										Share.share({ message: shareUrl }).catch((err: any) => {
-											statusMsg.content = `❌ Share failed: ${err.message}\nURL: ${shareUrl}`;
+										Share.share({ message: shareUrls }).catch((err: any) => {
+											statusMsg.content = `❌ Share failed: ${err.message}\nURLs:\n${shareUrls}`;
 											MessageActions.receiveMessage(cId, statusMsg);
 										});
 									} else {
-										statusMsg.content = `✅ Uploaded successfully: ${shareUrl}`;
+										statusMsg.content = `✅ Uploaded successfully:\n${shareUrls}`;
 										MessageActions.receiveMessage(cId, statusMsg);
 									}
 								}).catch((err: any) => {

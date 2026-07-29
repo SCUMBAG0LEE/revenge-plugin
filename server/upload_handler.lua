@@ -10,7 +10,6 @@
     - Zero external dependencies beyond OpenResty builtins
 ]]
 
-local upload = require("resty.upload")
 local cjson = require("cjson.safe")
 
 -- ── Configuration (all overridable via nginx `env` directives) ──────
@@ -41,75 +40,98 @@ if bearer ~= auth_token then
     return ngx.exit(403)
 end
 
--- ── Parse multipart upload ──────────────────────────────────────────
-local form, err = upload:new(chunk_size)
-if not form then
+-- ── Parse multipart upload (HTTP/2 Compatible) ──────────────
+ngx.req.read_body()
+local body = ngx.req.get_body_data()
+
+if not body then
+    local file_name = ngx.req.get_body_file()
+    if file_name then
+        local f = io.open(file_name, "rb")
+        if f then
+            body = f:read("*all")
+            f:close()
+        end
+    end
+end
+
+if not body then
+    ngx.status = 400
+    ngx.say(cjson.encode({ error = "No body received from NGINX buffering" }))
+    return ngx.exit(400)
+end
+
+local content_type = ngx.var.content_type or ""
+local boundary = content_type:match("boundary=(.+)")
+if not boundary then
+    ngx.status = 400
+    ngx.say(cjson.encode({ error = "Missing multipart boundary" }))
+    return ngx.exit(400)
+end
+
+local function parse_multipart(b, bound)
+    local b_str = "--" .. bound
+    local start_idx = 1
+    
+    while true do
+        local p_start, p_end = b:find(b_str, start_idx, true)
+        if not p_start then break end
+        
+        if b:sub(p_end + 1, p_end + 2) == "--" then break end
+        
+        local h_start = p_end + 3
+        local h_end, h_end_end = b:find("\r\n\r\n", h_start, true)
+        if not h_end then break end
+        
+        local headers = b:sub(h_start, h_end - 1)
+        local next_p_start = b:find(b_str, h_end_end + 1, true)
+        if not next_p_start then break end
+        
+        local data = b:sub(h_end_end + 1, next_p_start - 3)
+        
+        if headers:find('name="file"') then
+            local filename = headers:match('filename="([^"]+)"')
+            return data, filename
+        end
+        
+        start_idx = next_p_start
+    end
+    return nil, nil
+end
+
+local file_data, original_name = parse_multipart(body, boundary)
+
+if not file_data then
+    ngx.status = 400
+    ngx.say(cjson.encode({ error = "Could not extract file part from payload" }))
+    return ngx.exit(400)
+end
+
+local extension = ""
+if original_name then
+    extension = original_name:match("(%.[%w]+)$") or ""
+end
+
+-- Generate unique filename
+local unique_name = string.format(
+    "%d_%s%s",
+    ngx.now() * 1000,
+    string.sub(ngx.md5(ngx.var.request_id or tostring(ngx.now())), 1, 8),
+    extension
+)
+
+local saved_path = upload_dir .. unique_name
+local file_handle, err = io.open(saved_path, "wb")
+if not file_handle then
     ngx.status = 500
-    ngx.say(cjson.encode({ error = "Failed to initialise upload: " .. (err or "unknown") }))
+    ngx.say(cjson.encode({ error = "Cannot write file to disk: " .. (err or "unknown") }))
     return ngx.exit(500)
 end
 
-form:set_timeout(300000)  -- 5 minute timeout for large files
+file_handle:write(file_data)
+file_handle:close()
 
-local filename    = nil
-local file_handle = nil
-local saved_path  = nil
-local extension   = ""
-
-while true do
-    local typ, res, read_err = form:read()
-    if not typ then
-        ngx.status = 500
-        ngx.say(cjson.encode({ error = "Read error: " .. (read_err or "unknown") }))
-        if file_handle then file_handle:close() end
-        return ngx.exit(500)
-    end
-
-    if typ == "header" then
-        -- Extract original filename from Content-Disposition header
-        if res[1] and res[1]:lower() == "content-disposition" then
-            local original_name = res[2]:match('filename="(.-)"')
-            if original_name and original_name ~= "" then
-                -- Sanitise: keep only the extension from the original name
-                extension = original_name:match("(%.[%w]+)$") or ""
-            end
-        end
-
-        -- Open output file on first header encounter if not yet opened
-        if not file_handle and not saved_path then
-            -- Generate unique filename: timestamp_requestid.ext
-            local unique_name = string.format(
-                "%d_%s%s",
-                ngx.now() * 1000,
-                string.sub(ngx.md5(ngx.var.request_id or tostring(ngx.now())), 1, 8),
-                extension
-            )
-            saved_path = upload_dir .. unique_name
-            filename   = unique_name
-
-            file_handle, err = io.open(saved_path, "wb")
-            if not file_handle then
-                ngx.status = 500
-                ngx.say(cjson.encode({ error = "Cannot write file: " .. (err or "unknown") }))
-                return ngx.exit(500)
-            end
-        end
-
-    elseif typ == "body" then
-        if file_handle and res then
-            file_handle:write(res)
-        end
-
-    elseif typ == "part_end" then
-        if file_handle then
-            file_handle:close()
-            file_handle = nil
-        end
-
-    elseif typ == "eof" then
-        break
-    end
-end
+local filename = unique_name
 
 -- ── Response ────────────────────────────────────────────────────────
 if not filename then

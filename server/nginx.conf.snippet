@@ -71,8 +71,9 @@ location = /grimoire/upload {
     # Allow unlimited uploads (disable body size checking)
     client_max_body_size       0;
 
-    # Stream directly to Lua — don't buffer to temp files
-    client_body_buffer_size    128k;
+    # NGINX HTTP/2 Native Buffering
+    # This caches uploads in memory up to 20MB, spilling to disk if larger
+    client_body_buffer_size    20m;
 
     # Only allow POST
     limit_except POST {

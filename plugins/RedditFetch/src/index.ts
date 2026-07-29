@@ -213,13 +213,18 @@ export default {
 					if (silent) {
 						sendBotMessage(ctx.channel.id, fallbackWarning, [embed]);
 					} else {
-						if (MessageSender && MessageSender.sendMessage) {
-							MessageSender.sendMessage(ctx.channel.id, { 
+						const MessageActions = findByProps("receiveMessage", "sendClydeError") ?? findByProps("receiveMessage");
+						const NonceMaker = findByProps("generateNonce");
+						
+						if (MessageActions && MessageActions.sendMessage) {
+							const nonce = NonceMaker?.generateNonce ? NonceMaker.generateNonce() : "123456789012345678";
+							MessageActions.sendMessage(ctx.channel.id, { 
 								content: fallbackWarning + (isImage ? imgUrl : `https://reddit.com${finalPost.permalink}`),
+								nonce: nonce,
 								validNonShortcutEmojis: []
 							});
 						} else {
-							showToast("MessageSender not found!", getAssetIDByName("ic_warning_24px"));
+							showToast("MessageActions not found!", getAssetIDByName("ic_warning_24px"));
 						}
 					}
 				} catch (err: any) {
