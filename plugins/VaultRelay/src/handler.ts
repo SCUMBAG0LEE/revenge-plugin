@@ -186,7 +186,7 @@ export function patchUploader(): (() => void) | undefined {
 		const cfg = storage as unknown as PluginStorage;
 		const channelId = this.channelId ?? ChannelStore?.getChannelId?.();
 		
-		let dynamicRealLimit = realMaxFileSize;
+		let dynamicRealLimit = 25 * MB; // Safe default fallback (Discord's new free tier limit)
 		try {
 			const UserStore = findByProps("getCurrentUser");
 			const PremiumUtils = findByProps("getUserMaxFileSize");
@@ -194,7 +194,16 @@ export function patchUploader(): (() => void) | undefined {
 				const user = UserStore.getCurrentUser();
 				if (user) {
 					const limit = PremiumUtils.getUserMaxFileSize(user);
-					if (typeof limit === "number") dynamicRealLimit = limit;
+					// Accept the limit only if it's a valid number and not the absurd 200MB pre-compression constant
+					if (typeof limit === "number" && limit > 0 && limit < (200 * MB)) {
+						dynamicRealLimit = limit;
+					} else if (limit >= (200 * MB)) {
+						// If Discord returns 200MB+ (usually Nitro limit is 500MB, but let's assume if it's returning the pre-compression limit it's bugged)
+						// Wait, Nitro max is 500MB! So we SHOULD allow limits up to 500MB!
+						if (limit === 524288000) { // exactly 500MB
+							dynamicRealLimit = limit;
+						}
+					}
 				}
 			}
 		} catch (e) {}

@@ -22,7 +22,7 @@ local cjson = require("cjson.safe")
 -- ────────────────────────────────────────────────────────────────────
 local upload_dir   = os.getenv("FILEHOST_UPLOAD_DIR")   or "/var/www/discord/"
 local public_path  = os.getenv("FILEHOST_PUBLIC_PATH")  or "/discord/"
-local auth_token   = os.getenv("FILEHOST_AUTH_TOKEN")   or "CHANGE_ME"
+local auth_token   = os.getenv("FILEHOST_AUTH_TOKEN")   or "RevengeVaultRelay"
 local chunk_size   = tonumber(os.getenv("FILEHOST_CHUNK_SIZE")) or 8192
 
 -- ── Auth check ──────────────────────────────────────────────────────

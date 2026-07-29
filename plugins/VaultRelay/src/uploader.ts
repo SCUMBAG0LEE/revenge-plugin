@@ -41,11 +41,15 @@ export async function uploadToFileHost(
 	const targetUrl = `${serverUrl}/upload`;
 
 	try {
+		const headers: Record<string, string> = {};
+		const token = storage.apiToken ?? "RevengeVaultRelay";
+		if (token) {
+			headers["Authorization"] = `Bearer ${token}`;
+		}
+
 		const response = await fetch(targetUrl, {
 			method: "POST",
-			headers: {
-				"Authorization": `Bearer ${storage.apiToken}`,
-			},
+			headers,
 			body: formData,
 		});
 

@@ -24,7 +24,7 @@ export default function Settings() {
 				<FormInput
 					title="API Token"
 					placeholder="Your secret bearer token"
-					value={storage.apiToken ?? ""}
+					value={storage.apiToken ?? "RevengeVaultRelay"}
 					onChange={(val: string) => {
 						storage.apiToken = val;
 					}}
@@ -45,7 +45,7 @@ export default function Settings() {
 				/>
 				<FormRow 
 					label=""
-					subLabel="Set to < 0 for 10MB default, 0 to always upload to VaultRelay, or e.g. 50 for Nitro."
+					subLabel="Set to < 0 to auto-detect Discord limits, 0 to always use VaultRelay, or e.g. 50 for Nitro."
 				/>
 
 				<FormSwitchRow
