@@ -1,5 +1,6 @@
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findAll } from "@vendetta/metro";
+import { clipboard } from "@vendetta/metro/common";
 import { logger } from "@vendetta";
 
 const MessageActions = findByProps("receiveMessage", "sendClydeError") ?? findByProps("receiveMessage");
@@ -31,85 +32,47 @@ const unpatches: (() => void)[] = [];
 
 export default {
 	onLoad() {
-		const cmdProps = registerCommand({
-			name: "debug-props",
-			displayName: "debug-props",
-			description: "Find module by exact properties and show result",
-			displayDescription: "Find module by exact properties and show result",
-			options: [
-				{
-					name: "props",
-					displayName: "props",
-					description: "Comma separated properties to find",
-					displayDescription: "Comma separated properties to find",
-					required: true,
-					type: 3, // STRING
-				}
-			],
-			applicationId: "-1",
-			inputType: 1,
-			type: 1,
-			execute: (args: any, ctx: any) => {
-				const propsStr = args.find((a: any) => a.name === "props")?.value;
-				if (!propsStr) return;
-				
-				const props = propsStr.split(",").map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-				
-				let found: any = undefined;
-				try {
-					found = findByProps(...props);
-				} catch (e: any) {
-					sendLocalMessage(ctx.channel?.id, `❌ Error finding props:\n\`\`\`js\n${e.message}\n\`\`\``);
-					return;
-				}
-
-				let resultText = `Results for \`findByProps("${props.join('", "')}")\`:\n`;
-				if (!found) {
-					resultText += "❌ Module not found (undefined).";
-				} else {
-					resultText += "✅ Found!\n";
-					resultText += "Keys exported:\n```js\n";
-					resultText += Object.keys(found).join(", ");
-					resultText += "\n```";
-				}
-
-				sendLocalMessage(ctx.channel?.id, resultText);
-			},
-		});
-
-		const cmdSearch = registerCommand({
-			name: "search-props",
-			displayName: "search-props",
-			description: "Search all modules for a property name (fuzzy search)",
-			displayDescription: "Search all modules for a property name",
+		const cmdDebug = registerCommand({
+			name: "debug",
+			displayName: "debug",
+			description: "The ultimate module debugger. Fuzzy search, exact match, or dump all modules.",
+			displayDescription: "The ultimate module debugger",
 			options: [
 				{
 					name: "query",
 					displayName: "query",
-					description: "A keyword to search for (e.g. 'Upload', 'Size')",
-					displayDescription: "A keyword to search for (e.g. 'Upload', 'Size')",
-					required: true,
-					type: 3, // STRING
-				},
-				{
-					name: "full",
-					displayName: "full",
-					description: "Show all keys instead of just a preview?",
-					displayDescription: "Show all keys instead of just a preview?",
+					description: "What to search for (choose preset or type custom)",
+					displayDescription: "What to search for",
 					required: false,
 					type: 3, // STRING
 					choices: [
-						{ name: "true", displayName: "true", value: "true" },
-						{ name: "false", displayName: "false", value: "false" }
+						{ name: "getMaxFileSize", displayName: "getMaxFileSize", value: "getMaxFileSize" },
+						{ name: "MAX_ATTACHMENT_SIZE", displayName: "MAX_ATTACHMENT_SIZE", value: "MAX_ATTACHMENT_SIZE" },
+						{ name: "getUploadFileSizeLimit", displayName: "getUploadFileSizeLimit", value: "getUploadFileSizeLimit" },
+						{ name: "UPLOAD_ATTACHMENT_MAX_SIZE", displayName: "UPLOAD_ATTACHMENT_MAX_SIZE", value: "UPLOAD_ATTACHMENT_MAX_SIZE" },
+						{ name: "CloudUpload", displayName: "CloudUpload", value: "CloudUpload" }
 					]
 				},
 				{
-					name: "show_all_modules",
-					displayName: "show_all_modules",
-					description: "Show ALL matching modules (warning: can be huge)",
-					displayDescription: "Show ALL matching modules",
+					name: "mode",
+					displayName: "mode",
+					description: "How to search (fuzzy, exact, or dump_all)",
+					displayDescription: "How to search",
 					required: false,
 					type: 3, // STRING
+					choices: [
+						{ name: "fuzzy", displayName: "fuzzy (Contains substring)", value: "fuzzy" },
+						{ name: "exact", displayName: "exact (Exact property match)", value: "exact" },
+						{ name: "dump_all", displayName: "dump_all (Dump every module)", value: "dump_all" }
+					]
+				},
+				{
+					name: "to_clipboard",
+					displayName: "to_clipboard",
+					description: "Copy results to clipboard instead of spamming chat?",
+					displayDescription: "Copy results to clipboard?",
+					required: false,
+					type: 5, // BOOLEAN (Mobile Discord usually handles this fine as a toggle, or we can use type 3. Let's use type 3 to be safe based on past complaints)
 					choices: [
 						{ name: "true", displayName: "true", value: "true" },
 						{ name: "false", displayName: "false", value: "false" }
@@ -120,82 +83,68 @@ export default {
 			inputType: 1,
 			type: 1,
 			execute: (args: any, ctx: any) => {
-				const query = args.find((a: any) => a.name === "query")?.value?.toLowerCase();
-				const full = args.find((a: any) => a.name === "full")?.value === "true";
-				const showAll = args.find((a: any) => a.name === "show_all_modules")?.value === "true";
-				if (!query) return;
+				const query = args.find((a: any) => a.name === "query")?.value;
+				const mode = args.find((a: any) => a.name === "mode")?.value || "fuzzy";
+				const toClipboard = args.find((a: any) => a.name === "to_clipboard")?.value === "true";
+				
+				if (mode !== "dump_all" && !query) {
+					sendLocalMessage(ctx.channel?.id, `❌ You must provide a \`query\` unless you are using \`mode: dump_all\`.`);
+					return;
+				}
 				
 				try {
-					const results = findAll((m: any) => m && Object.keys(m).some(k => k.toLowerCase().includes(query)));
+					let results: any[] = [];
+					
+					if (mode === "dump_all") {
+						results = findAll((m: any) => m && Object.keys(m).length > 0);
+					} else if (mode === "exact") {
+						const props = query.split(",").map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+						const found = findByProps(...props);
+						if (found) results = [found];
+					} else {
+						// fuzzy
+						const q = query.toLowerCase();
+						results = findAll((m: any) => m && Object.keys(m).some(k => k.toLowerCase().includes(q)));
+					}
 					
 					if (!results || results.length === 0) {
-						sendLocalMessage(ctx.channel?.id, `❌ No modules found with properties containing \`${query}\`.`);
+						sendLocalMessage(ctx.channel?.id, `❌ No modules found matching your query.`);
 						return;
 					}
 
-					let resultText = `✅ Found ${results.length} modules containing \`${query}\`:\n\n`;
+					let resultText = `✅ Found ${results.length} modules (Mode: ${mode}${query ? `, Query: ${query}` : ''}):\n\n`;
 					
-					// Limit to 5 results to avoid giant text walls unless bypassed
-					const toShow = showAll ? results : results.slice(0, 5);
-					for (let i = 0; i < toShow.length; i++) {
-						const mod = toShow[i];
+					for (let i = 0; i < results.length; i++) {
+						const mod = results[i];
 						const keys = Object.keys(mod);
-						const matchingKeys = keys.filter(k => k.toLowerCase().includes(query));
 						resultText += `**Match ${i + 1}** (Total keys: ${keys.length})\n`;
-						resultText += `Matching Keys: \`${matchingKeys.join(", ")}\`\n`;
 						
-						if (full) {
-							resultText += `All Keys: \`${keys.join(", ")}\`\n\n`;
-						} else {
-							// Show a preview of the first few keys overall
-							resultText += `Preview: \`${keys.slice(0, 5).join(", ")}${keys.length > 5 ? "..." : ""}\`\n\n`;
+						if (mode === "fuzzy") {
+							const q = query.toLowerCase();
+							const matchingKeys = keys.filter(k => k.toLowerCase().includes(q));
+							resultText += `Matching Keys: \`${matchingKeys.join(", ")}\`\n`;
 						}
+						
+						resultText += `All Keys: \`${keys.join(", ")}\`\n\n`;
 					}
 
-					if (results.length > 5 && !showAll) {
-						resultText += `*...and ${results.length - 5} more modules not shown. Use \`show_all_modules: true\` to view all.*`;
+					if (toClipboard) {
+						if (clipboard && clipboard.setString) {
+							clipboard.setString(resultText);
+							sendLocalMessage(ctx.channel?.id, `✅ Copied **${results.length}** modules to your clipboard securely!`);
+						} else {
+							sendLocalMessage(ctx.channel?.id, `❌ Clipboard API is not available on your client!`);
+						}
+					} else {
+						sendLocalMessage(ctx.channel?.id, resultText);
 					}
-
-					sendLocalMessage(ctx.channel?.id, resultText);
 				} catch (e: any) {
 					sendLocalMessage(ctx.channel?.id, `❌ Error searching props:\n\`\`\`js\n${e.message}\n\`\`\``);
 				}
 			}
 		});
 
-		const cmdEval = registerCommand({
-			name: "eval",
-			displayName: "eval",
-			description: "Evaluate arbitrary JS code",
-			displayDescription: "Evaluate arbitrary JS code",
-			options: [
-				{
-					name: "code",
-					displayName: "code",
-					description: "JS code to evaluate",
-					displayDescription: "JS code to evaluate",
-					required: true,
-					type: 3, // STRING
-				}
-			],
-			applicationId: "-1",
-			inputType: 1,
-			type: 1,
-			execute: (args: any, ctx: any) => {
-				const code = args.find((a: any) => a.name === "code")?.value;
-				if (!code) return;
-				
-				try {
-					const result = eval(code);
-					const formatted = typeof result === "object" ? JSON.stringify(result, null, 2) : String(result);
-					sendLocalMessage(ctx.channel?.id, `✅ **Eval Success**\n\`\`\`js\n${formatted}\n\`\`\``);
-				} catch (e: any) {
-					sendLocalMessage(ctx.channel?.id, `❌ **Eval Error**\n\`\`\`js\n${e.message}\n\`\`\``);
-				}
-			}
-		});
-
-		unpatches.push(cmdProps, cmdSearch, cmdEval);
+		unpatches.push(cmdDebug);
 	},
 	onUnload() {
 		for (const unpatch of unpatches) unpatch();
