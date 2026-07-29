@@ -215,7 +215,8 @@ export default {
 					} else {
 						if (MessageSender && MessageSender.sendMessage) {
 							MessageSender.sendMessage(ctx.channel.id, { 
-								content: fallbackWarning + (isImage ? imgUrl : `https://reddit.com${finalPost.permalink}`) 
+								content: fallbackWarning + (isImage ? imgUrl : `https://reddit.com${finalPost.permalink}`),
+								validNonShortcutEmojis: []
 							});
 						} else {
 							showToast("MessageSender not found!", getAssetIDByName("ic_warning_24px"));

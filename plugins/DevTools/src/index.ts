@@ -34,8 +34,8 @@ export default {
 					required: false,
 					type: 3, // STRING
 					choices: [
-						{ name: "ThemeStore", displayName: "ThemeStore", value: "ThemeStore" },
-						{ name: "ChannelStore", displayName: "ChannelStore", value: "ChannelStore" },
+						{ name: "MessageActions", displayName: "MessageActions", value: "MessageActions" },
+						{ name: "MessageEvents", displayName: "MessageEvents", value: "MessageEvents" },
 						{ name: "sendMessage", displayName: "sendMessage", value: "sendMessage" },
 						{ name: "NativeModules", displayName: "NativeModules", value: "NativeModules" },
 						{ name: "CloudUpload", displayName: "CloudUpload", value: "CloudUpload" }

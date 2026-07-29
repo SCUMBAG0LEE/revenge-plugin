@@ -132,11 +132,7 @@ export function patchUploader(): (() => void) | undefined {
 
 		try {
 			const url = await uploadToFileHost(
-				{
-					uri: file.uri ?? file.path ?? file.url,
-					name: file.filename ?? file.name ?? "file",
-					type: file.mime ?? file.type ?? "application/octet-stream",
-				},
+				file as any,
 				cfg,
 				(pct) => {
 					if (pct % 25 === 0) {
